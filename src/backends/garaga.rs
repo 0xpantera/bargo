@@ -39,6 +39,40 @@ pub fn run(args: &[&str]) -> Result<()> {
     })
 }
 
+/// Execute a garaga command and capture its output
+pub fn run_with_output(args: &[&str]) -> Result<(String, String)> {
+    // Ensure garaga is available before running
+    ensure_available()?;
+
+    let output = std::process::Command::new("garaga")
+        .args(args)
+        .output()
+        .map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to execute garaga command: {}\n\n\
+                 Troubleshooting:\n\
+                 • Ensure garaga is properly installed: pipx install garaga\n\
+                 • Check that Python 3.10+ is available\n\
+                 • Verify garaga is in your PATH",
+                e
+            )
+        })?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if !output.status.success() {
+        return Err(color_eyre::eyre::eyre!(
+            "Garaga command failed with exit code: {}\nStdout: {}\nStderr: {}",
+            output.status.code().unwrap_or(-1),
+            stdout,
+            stderr
+        ));
+    }
+
+    Ok((stdout, stderr))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
