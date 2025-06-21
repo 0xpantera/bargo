@@ -5,6 +5,11 @@ use tracing::{info, warn};
 mod backends;
 mod util;
 
+use util::{
+    OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions, error,
+    format_operation_result, info, path, print_banner, success,
+};
+
 /// A developer-friendly CLI wrapper for Noir ZK development
 #[derive(Parser)]
 #[command(
@@ -85,41 +90,40 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Check => {
             if !cli.quiet {
-                println!("🔍 Checking circuit...");
+                print_banner("check");
             }
             handle_check(&cli)?;
         }
         Commands::Build => {
             if !cli.quiet {
-                println!("🔨 Building circuit...");
+                print_banner("build");
             }
             handle_build(&cli)?;
         }
         Commands::Prove { skip_verify } => {
             if !cli.quiet {
+                print_banner("prove");
                 if skip_verify {
-                    println!("⚡ Generating proof (skipping verification)...");
-                } else {
-                    println!("🔐 Generating and verifying proof...");
+                    println!("⚡ Skipping verification step\n");
                 }
             }
             handle_prove(&cli, skip_verify)?;
         }
         Commands::Verify => {
             if !cli.quiet {
-                println!("✅ Verifying proof...");
+                print_banner("verify");
             }
             handle_verify(&cli)?;
         }
         Commands::Solidity => {
             if !cli.quiet {
-                println!("📄 Generating Solidity verifier...");
+                print_banner("solidity");
             }
             handle_solidity(&cli)?;
         }
         Commands::Clean => {
             if !cli.quiet {
-                println!("🧹 Cleaning build artifacts...");
+                print_banner("clean");
             }
             handle_clean(&cli)?;
         }
@@ -184,12 +188,13 @@ fn handle_check(cli: &Cli) -> Result<()> {
 
 fn handle_build(cli: &Cli) -> Result<()> {
     let pkg_name = get_package_name(cli)?;
+    let mut summary = OperationSummary::new();
 
     // Check if rebuild is needed (smart rebuild detection)
     if !cli.dry_run {
         let needs_rebuild = util::needs_rebuild(&pkg_name)?;
         if !needs_rebuild && !cli.quiet {
-            println!("✅ Build is up to date");
+            println!("{}", success("Build is up to date"));
             return Ok(());
         }
         if needs_rebuild && cli.verbose {
@@ -208,24 +213,55 @@ fn handle_build(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
+    let timer = Timer::start();
     let result = backends::nargo::run(&["execute"]);
 
-    if result.is_ok() && !cli.quiet {
-        println!(
-            "✅ Bytecode → {}",
-            util::get_bytecode_path(&pkg_name).display()
-        );
-        println!(
-            "✅ Witness → {}",
-            util::get_witness_path(&pkg_name).display()
-        );
-    }
+    match result {
+        Ok(()) => {
+            if !cli.quiet {
+                let bytecode_path = util::get_bytecode_path(&pkg_name);
+                let witness_path = util::get_witness_path(&pkg_name);
 
-    result
+                println!(
+                    "{}",
+                    success(&format_operation_result(
+                        "Bytecode generated",
+                        &bytecode_path,
+                        &timer
+                    ))
+                );
+
+                // Create a new timer for witness (they're generated together but we show separate timing)
+                let witness_timer = Timer::start();
+                println!(
+                    "{}",
+                    success(&format_operation_result(
+                        "Witness generated",
+                        &witness_path,
+                        &witness_timer
+                    ))
+                );
+
+                summary.add_operation(&format!("Circuit compiled for {}", path(&pkg_name)));
+                summary.add_operation(&format!(
+                    "Bytecode generated ({})",
+                    util::format_file_size(&bytecode_path)
+                ));
+                summary.add_operation(&format!(
+                    "Witness generated ({})",
+                    util::format_file_size(&witness_path)
+                ));
+                summary.print();
+            }
+            Ok(())
+        }
+        Err(e) => Err(enhance_error_with_suggestions(e)),
+    }
 }
 
 fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
-    let pkg_name = get_package_name(cli)?;
+    let pkg_name = get_package_name(cli).map_err(enhance_error_with_suggestions)?;
+    let mut summary = OperationSummary::new();
 
     // Validate that required build files exist
     let required_files = vec![
@@ -234,7 +270,7 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
     ];
 
     if !cli.dry_run {
-        util::validate_files_exist(&required_files)?;
+        util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
     // Build bb prove arguments
@@ -268,10 +304,23 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
     }
 
     // Run bb prove
-    backends::bb::run(&prove_args)?;
+    let prove_timer = Timer::start();
+    backends::bb::run(&prove_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        println!("✅ Proof generated → {}", util::get_proof_path().display());
+        let proof_path = util::get_proof_path();
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "Proof generated",
+                &proof_path,
+                &prove_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "Proof generated ({})",
+            util::format_file_size(&proof_path)
+        ));
     }
 
     // Generate verification key
@@ -281,10 +330,19 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
         info!("Running: bb {}", vk_args.join(" "));
     }
 
-    backends::bb::run(&vk_args)?;
+    let vk_timer = Timer::start();
+    backends::bb::run(&vk_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        println!("✅ VK saved → {}", util::get_vk_path().display());
+        let vk_path = util::get_vk_path();
+        println!(
+            "{}",
+            success(&format_operation_result("VK saved", &vk_path, &vk_timer))
+        );
+        summary.add_operation(&format!(
+            "Verification key generated ({})",
+            util::format_file_size(&vk_path)
+        ));
     }
 
     // Verify proof unless skipped
@@ -299,10 +357,18 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
             info!("Running: bb {}", verify_args.join(" "));
         }
 
-        backends::bb::run(&verify_args)?;
+        let verify_timer = Timer::start();
+        backends::bb::run(&verify_args).map_err(enhance_error_with_suggestions)?;
 
         if !cli.quiet {
-            println!("✅ Proof verified successfully");
+            println!(
+                "{}",
+                success(&format!(
+                    "Proof verified successfully ({})",
+                    verify_timer.elapsed()
+                ))
+            );
+            summary.add_operation("Proof verification completed");
         }
     }
 
@@ -314,7 +380,7 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     let required_files = vec![util::get_proof_path(), util::get_vk_path()];
 
     if !cli.dry_run {
-        util::validate_files_exist(&required_files)?;
+        util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
     let proof_path = util::get_proof_path();
@@ -332,23 +398,31 @@ fn handle_verify(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    backends::bb::run(&verify_args)?;
+    let timer = Timer::start();
+    backends::bb::run(&verify_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        println!("✅ Proof verified successfully");
+        println!(
+            "{}",
+            success(&format!(
+                "Proof verified successfully ({})",
+                timer.elapsed()
+            ))
+        );
     }
 
     Ok(())
 }
 
 fn handle_solidity(cli: &Cli) -> Result<()> {
-    let pkg_name = get_package_name(cli)?;
+    let pkg_name = get_package_name(cli).map_err(enhance_error_with_suggestions)?;
+    let mut summary = OperationSummary::new();
 
     // Validate that required build files exist
     let required_files = vec![util::get_bytecode_path(&pkg_name)];
 
     if !cli.dry_run {
-        util::validate_files_exist(&required_files)?;
+        util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
     // Generate VK with keccak oracle hash for Solidity optimization
@@ -376,17 +450,35 @@ fn handle_solidity(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    backends::bb::run(&vk_args)?;
+    let vk_timer = Timer::start();
+    backends::bb::run(&vk_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
+        let vk_path = util::get_vk_path();
         println!(
-            "✅ VK (keccak optimized) → {}",
-            util::get_vk_path().display()
+            "{}",
+            success(&format_operation_result(
+                "VK (keccak optimized)",
+                &vk_path,
+                &vk_timer
+            ))
         );
+        summary.add_operation(&format!(
+            "Verification key with keccak optimization ({})",
+            util::format_file_size(&vk_path)
+        ));
     }
 
     // Create contracts directory if it doesn't exist
-    std::fs::create_dir_all("./contracts")?;
+    std::fs::create_dir_all("./contracts").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create contracts directory: {}", e),
+            &[
+                "Check directory permissions",
+                "Ensure you have write access to the current directory",
+            ],
+        )
+    })?;
 
     // Generate Solidity verifier
     let vk_path = util::get_vk_path();
@@ -403,10 +495,24 @@ fn handle_solidity(cli: &Cli) -> Result<()> {
         info!("Running: bb {}", solidity_args.join(" "));
     }
 
-    backends::bb::run(&solidity_args)?;
+    let solidity_timer = Timer::start();
+    backends::bb::run(&solidity_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        println!("✅ Solidity verifier → contracts/Verifier.sol");
+        let verifier_path = std::path::PathBuf::from("./contracts/Verifier.sol");
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "Solidity verifier",
+                &verifier_path,
+                &solidity_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "Solidity verifier contract ({})",
+            util::format_file_size(&verifier_path)
+        ));
+        summary.print();
     }
 
     Ok(())
@@ -425,11 +531,11 @@ fn handle_clean(cli: &Cli) -> Result<()> {
     if std::path::Path::new("target").exists() {
         std::fs::remove_dir_all("target")?;
         if !cli.quiet {
-            println!("✅ Removed target/");
+            println!("{}", success("Removed target/"));
         }
     } else {
         if !cli.quiet {
-            println!("✅ target/ already clean");
+            println!("{}", info("target/ already clean"));
         }
     }
 
@@ -449,5 +555,5 @@ fn build_nargo_args(cli: &Cli, base_args: &[&str]) -> Result<Vec<String>> {
 }
 
 fn get_package_name(cli: &Cli) -> Result<String> {
-    util::get_package_name(cli.pkg.as_ref())
+    util::get_package_name(cli.pkg.as_ref()).map_err(enhance_error_with_suggestions)
 }
