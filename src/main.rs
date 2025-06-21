@@ -6,7 +6,7 @@ mod backends;
 mod util;
 
 use util::{
-    OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions, error,
+    OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions,
     format_operation_result, info, path, print_banner, success,
 };
 
@@ -68,6 +68,10 @@ enum Commands {
     /// Clean build artifacts
     #[command(about = "Remove target directory and all build artifacts")]
     Clean,
+
+    /// Clean and rebuild (equivalent to clean + build)
+    #[command(about = "Remove target directory and rebuild from scratch")]
+    Rebuild,
 }
 
 fn main() -> Result<()> {
@@ -126,6 +130,12 @@ fn main() -> Result<()> {
                 print_banner("clean");
             }
             handle_clean(&cli)?;
+        }
+        Commands::Rebuild => {
+            if !cli.quiet {
+                print_banner("rebuild");
+            }
+            handle_rebuild(&cli)?;
         }
     }
 
@@ -552,6 +562,101 @@ fn build_nargo_args(cli: &Cli, base_args: &[&str]) -> Result<Vec<String>> {
     }
 
     Ok(args)
+}
+
+fn handle_rebuild(cli: &Cli) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Step 1: Clean
+    if cli.verbose {
+        info!("Step 1/2: Cleaning target directory");
+    }
+
+    if !cli.quiet {
+        println!("🧹 Cleaning build artifacts...");
+    }
+
+    if cli.dry_run {
+        println!("Would run: rm -rf target/");
+    } else {
+        if std::path::Path::new("target").exists() {
+            std::fs::remove_dir_all("target")?;
+            if !cli.quiet {
+                println!("{}", success("Removed target/"));
+            }
+            summary.add_operation("Target directory cleaned");
+        } else {
+            if !cli.quiet {
+                println!("{}", info("target/ already clean"));
+            }
+        }
+    }
+
+    // Step 2: Build
+    if cli.verbose {
+        info!("Step 2/2: Building from scratch");
+    }
+
+    if !cli.quiet {
+        println!("\n🔨 Building circuit...");
+    }
+
+    let pkg_name = get_package_name(cli)?;
+    let args = build_nargo_args(cli, &[])?;
+
+    if cli.verbose {
+        info!("Running: nargo execute {}", args.join(" "));
+    }
+
+    if cli.dry_run {
+        println!("Would run: nargo execute {}", args.join(" "));
+        return Ok(());
+    }
+
+    let timer = Timer::start();
+    let result = backends::nargo::run(&["execute"]);
+
+    match result {
+        Ok(()) => {
+            if !cli.quiet {
+                let bytecode_path = util::get_bytecode_path(&pkg_name);
+                let witness_path = util::get_witness_path(&pkg_name);
+
+                println!(
+                    "{}",
+                    success(&format_operation_result(
+                        "Bytecode generated",
+                        &bytecode_path,
+                        &timer
+                    ))
+                );
+
+                // Create a new timer for witness (they're generated together but we show separate timing)
+                let witness_timer = Timer::start();
+                println!(
+                    "{}",
+                    success(&format_operation_result(
+                        "Witness generated",
+                        &witness_path,
+                        &witness_timer
+                    ))
+                );
+
+                summary.add_operation(&format!("Circuit rebuilt for {}", path(&pkg_name)));
+                summary.add_operation(&format!(
+                    "Bytecode generated ({})",
+                    util::format_file_size(&bytecode_path)
+                ));
+                summary.add_operation(&format!(
+                    "Witness generated ({})",
+                    util::format_file_size(&witness_path)
+                ));
+                summary.print();
+            }
+            Ok(())
+        }
+        Err(e) => Err(enhance_error_with_suggestions(e)),
+    }
 }
 
 fn get_package_name(cli: &Cli) -> Result<String> {
