@@ -105,7 +105,11 @@ enum CairoCommands {
 
     /// Declare verifier contract on Starknet
     #[command(about = "Declare verifier contract on Starknet")]
-    Declare,
+    Declare {
+        /// Network to declare on (sepolia or mainnet)
+        #[arg(long, default_value = "sepolia")]
+        network: String,
+    },
 
     /// Deploy declared verifier contract
     #[command(about = "Deploy declared verifier contract")]
@@ -120,7 +124,7 @@ enum CairoCommands {
     VerifyOnchain {
         /// Address of deployed verifier contract
         #[arg(short = 'a', long)]
-        address: String,
+        address: Option<String>,
     },
 }
 
@@ -210,11 +214,11 @@ fn main() -> Result<()> {
                 }
                 handle_cairo_data(&cli)?;
             }
-            CairoCommands::Declare => {
+            CairoCommands::Declare { network } => {
                 if !cli.quiet {
                     print_banner("cairo declare");
                 }
-                handle_cairo_declare(&cli)?;
+                handle_cairo_declare(&cli, network)?;
             }
             CairoCommands::Deploy { class_hash } => {
                 if !cli.quiet {
@@ -226,7 +230,7 @@ fn main() -> Result<()> {
                 if !cli.quiet {
                     print_banner("cairo verify-onchain");
                 }
-                handle_cairo_verify_onchain(&cli, &address)?;
+                handle_cairo_verify_onchain(&cli, address.as_deref())?;
             }
         },
         Commands::Doctor => {
@@ -861,7 +865,7 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
         )
     })?;
 
-    // Generate keccak-flavoured proof in target/starknet/
+    // Generate starknet-flavoured proof in target/starknet/
     let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
     let witness_path = util::get_witness_path(&pkg_name, Flavour::Bb);
     let bytecode_str = bytecode_path.to_string_lossy();
@@ -869,14 +873,17 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
 
     let prove_args = vec![
         "prove",
+        "-s",
+        "ultra_honk",
+        "--oracle_hash",
+        "starknet",
+        "--zk",
         "-b",
         &bytecode_str,
         "-w",
         &witness_str,
         "-o",
         "./target/starknet/",
-        "--oracle_hash",
-        "keccak",
     ];
 
     if cli.verbose {
@@ -892,16 +899,16 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
             "-o",
             "./target/starknet/",
             "--oracle_hash",
-            "keccak",
+            "starknet",
         ];
         println!("Would run: bb {}", vk_args.join(" "));
         println!(
-            "Would run: garaga gen --system ultra_keccak_honk --vk target/starknet/vk -o contracts/Verifier.cairo"
+            "Would run: garaga gen --system ultra_starknet_zk_honk --vk target/starknet/vk -o contracts/Verifier.cairo"
         );
         return Ok(());
     }
 
-    // Run bb prove with keccak oracle
+    // Run bb prove with starknet oracle
     let prove_timer = Timer::start();
     backends::bb::run(&prove_args).map_err(enhance_error_with_suggestions)?;
 
@@ -910,18 +917,18 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
         println!(
             "{}",
             success(&format_operation_result(
-                "Keccak proof generated",
+                "Starknet proof generated",
                 &proof_path,
                 &prove_timer
             ))
         );
         summary.add_operation(&format!(
-            "Keccak proof generated ({})",
+            "Starknet proof generated ({})",
             util::format_file_size(&proof_path)
         ));
     }
 
-    // Generate keccak-flavoured VK in target/starknet/
+    // Generate starknet-flavoured VK in target/starknet/
     let vk_args = vec![
         "write_vk",
         "-b",
@@ -929,7 +936,7 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
         "-o",
         "./target/starknet/",
         "--oracle_hash",
-        "keccak",
+        "starknet",
     ];
 
     if cli.verbose {
@@ -944,13 +951,13 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
         println!(
             "{}",
             success(&format_operation_result(
-                "Keccak VK generated",
+                "Starknet VK generated",
                 &vk_path,
                 &vk_timer
             ))
         );
         summary.add_operation(&format!(
-            "Keccak verification key ({})",
+            "Starknet verification key ({})",
             util::format_file_size(&vk_path)
         ));
     }
@@ -972,7 +979,7 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
     let garaga_args = vec![
         "gen",
         "--system",
-        "ultra_keccak_honk",
+        "ultra_starknet_zk_honk",
         "--vk",
         &vk_str,
         "--project-name",
@@ -1031,7 +1038,7 @@ fn handle_cairo_data(cli: &Cli) -> Result<()> {
     let garaga_args = vec![
         "calldata",
         "--system",
-        "ultra_keccak_honk",
+        "ultra_starknet_zk_honk",
         "--proof",
         &proof_str,
         "--vk",
@@ -1067,19 +1074,26 @@ fn handle_cairo_data(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn handle_cairo_declare(cli: &Cli) -> Result<()> {
+fn handle_cairo_declare(cli: &Cli, network: &str) -> Result<()> {
+    let pkg_name = get_package_name(cli)?;
     let mut summary = OperationSummary::new();
 
-    // Validate that Cairo verifier contract exists
-    let verifier_contract_path = std::path::PathBuf::from("./contracts/Verifier.cairo");
+    // Validate that Cairo project directory exists (created by garaga gen)
+    let cairo_project_path = std::path::PathBuf::from(format!("./{}", pkg_name));
+    let scarb_toml_path = cairo_project_path.join("Scarb.toml");
     if !cli.dry_run {
-        util::validate_files_exist(&[verifier_contract_path.clone()])
-            .map_err(enhance_error_with_suggestions)?;
+        util::validate_files_exist(&[scarb_toml_path]).map_err(enhance_error_with_suggestions)?;
     }
 
     // Declare Cairo verifier contract using garaga
-    let contract_str = verifier_contract_path.to_string_lossy();
-    let garaga_args = vec!["declare", "--contract", &contract_str];
+    let project_str = cairo_project_path.to_string_lossy();
+    let garaga_args = vec![
+        "declare",
+        "--project-path",
+        &project_str,
+        "--network",
+        network,
+    ];
 
     if cli.verbose {
         info!("Running: garaga {}", garaga_args.join(" "));
@@ -1091,7 +1105,75 @@ fn handle_cairo_declare(cli: &Cli) -> Result<()> {
     }
 
     let declare_timer = Timer::start();
-    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+    let (stdout, _stderr) =
+        backends::garaga::run_with_output(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    // Check for declaration errors in garaga output
+    if stdout.contains("Error during declaration")
+        || stdout.contains("Out of gas")
+        || stdout.contains("Transaction execution error")
+    {
+        return Err(create_smart_error(
+            "Contract declaration failed",
+            &[
+                "The garaga declare command failed with errors",
+                "Check the error output above for details",
+                "This may be due to insufficient gas, network issues, or account problems",
+                "Try running the command again or check your account funding",
+            ],
+        ));
+    }
+
+    // Compute class hash from compiled contract
+    let compiled_contract_path = cairo_project_path.join("target/dev").join(format!(
+        "{}_UltraStarknetZKHonkVerifier.compiled_contract_class.json",
+        pkg_name
+    ));
+
+    let mut class_hash_output = String::new();
+    if compiled_contract_path.exists() {
+        // Use starkli to compute class hash
+        let starkli_output = std::process::Command::new("starkli")
+            .args(&["class-hash", &compiled_contract_path.to_string_lossy()])
+            .output();
+
+        match starkli_output {
+            Ok(output) if output.status.success() => {
+                class_hash_output = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !cli.quiet {
+                    println!("{}", success(&format!("Class hash: {}", class_hash_output)));
+                }
+
+                // Save class hash to file for subsequent deploy command
+                let class_hash_file = std::path::Path::new("target/starknet/.bargo_class_hash");
+                if let Some(parent) = class_hash_file.parent() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        if cli.verbose {
+                            eprintln!("Warning: Failed to create target directory: {}", e);
+                        }
+                    }
+                }
+                if let Err(e) = std::fs::write(class_hash_file, &class_hash_output) {
+                    if cli.verbose {
+                        eprintln!("Warning: Failed to save class hash to file: {}", e);
+                    }
+                }
+            }
+            Ok(output) => {
+                if cli.verbose {
+                    eprintln!(
+                        "starkli failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+            }
+            Err(e) => {
+                if cli.verbose {
+                    eprintln!("Failed to run starkli: {}", e);
+                }
+            }
+        }
+    }
 
     if !cli.quiet {
         println!(
@@ -1101,7 +1183,14 @@ fn handle_cairo_declare(cli: &Cli) -> Result<()> {
                 declare_timer.elapsed()
             ))
         );
-        summary.add_operation("Cairo verifier contract declared on Starknet");
+        let mut operation = "Cairo verifier contract declared on Starknet".to_string();
+        if !class_hash_output.is_empty() {
+            operation = format!(
+                "Cairo verifier contract declared on Starknet (class hash: {})",
+                class_hash_output
+            );
+        }
+        summary.add_operation(&operation);
         summary.print();
     }
 
@@ -1111,20 +1200,35 @@ fn handle_cairo_declare(cli: &Cli) -> Result<()> {
 fn handle_cairo_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
     let mut summary = OperationSummary::new();
 
-    // Validate that class hash is provided
-    let hash = class_hash.ok_or_else(|| {
-        create_smart_error(
-            "Class hash is required for deployment",
-            &[
-                "Provide a class hash with --class-hash <HASH>",
-                "Get the class hash from the declare command output",
-                "Use 'bargo cairo declare' to declare the contract first",
-            ],
-        )
-    })?;
+    // Get class hash from parameter or from saved file
+    let hash = match class_hash {
+        Some(hash) => hash.to_string(),
+        None => {
+            // Try to read class hash from file saved by declare command
+            match std::fs::read_to_string("target/starknet/.bargo_class_hash") {
+                Ok(saved_hash) => {
+                    let hash = saved_hash.trim().to_string();
+                    if !cli.quiet {
+                        println!("{}", success(&format!("Using saved class hash: {}", hash)));
+                    }
+                    hash
+                }
+                Err(_) => {
+                    return Err(create_smart_error(
+                        "Class hash is required for deployment",
+                        &[
+                            "Provide a class hash with --class-hash <HASH>",
+                            "Or run 'bargo cairo declare' first to save the class hash",
+                            "The declare command will save the class hash for deployment",
+                        ],
+                    ));
+                }
+            }
+        }
+    };
 
     // Deploy Cairo verifier contract using garaga
-    let garaga_args = vec!["deploy", "--class-hash", hash];
+    let garaga_args = vec!["deploy", "--class-hash", &hash];
 
     if cli.verbose {
         info!("Running: garaga {}", garaga_args.join(" "));
@@ -1137,7 +1241,84 @@ fn handle_cairo_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
     }
 
     let deploy_timer = Timer::start();
-    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+    let (stdout, stderr) =
+        backends::garaga::run_with_output(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    // Debug output to see what we're capturing
+    if cli.verbose {
+        println!("=== GARAGA DEPLOY OUTPUT ===");
+        println!("STDOUT:\n{}", stdout);
+        println!("STDERR:\n{}", stderr);
+        println!("===========================");
+    }
+
+    // Check for deployment errors in garaga output
+    if stdout.contains("Deployment error")
+        || stdout.contains("Contract not deployed")
+        || stdout.contains("Out of gas")
+    {
+        return Err(create_smart_error(
+            "Contract deployment failed",
+            &[
+                "The garaga deploy command failed with errors",
+                "Check the error output above for details",
+                "This may be due to insufficient gas, network issues, or account problems",
+                "Try running the command again or check your account funding",
+            ],
+        ));
+    }
+
+    // Parse contract address from garaga output
+    let mut contract_address = String::new();
+    for line in stdout.lines() {
+        if cli.verbose {
+            println!("Processing line: {}", line);
+        }
+        if line.contains("Contract address on")
+            || line.contains("Contract successfully deployed at")
+            || line.contains("Contract already deployed at")
+            || line.contains("Contract found at")
+        {
+            if cli.verbose {
+                println!("Found address line: {}", line);
+            }
+            // Extract hex address (0x followed by hex chars)
+            if let Some(start) = line.find("0x") {
+                let addr_part = &line[start..];
+                if let Some(end) = addr_part.find(char::is_whitespace) {
+                    contract_address = addr_part[..end].to_string();
+                } else {
+                    contract_address = addr_part.to_string();
+                }
+                if cli.verbose {
+                    println!("Extracted address: {}", contract_address);
+                }
+                break;
+            }
+        }
+    }
+
+    // Save contract address to file for subsequent verify-onchain command
+    if !contract_address.is_empty() {
+        let address_file = std::path::Path::new("target/starknet/.bargo_contract_address");
+        if let Some(parent) = address_file.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                if cli.verbose {
+                    eprintln!("Warning: Failed to create target directory: {}", e);
+                }
+            }
+        }
+        if let Err(e) = std::fs::write(address_file, &contract_address) {
+            if cli.verbose {
+                eprintln!("Warning: Failed to save contract address to file: {}", e);
+            }
+        } else if !cli.quiet {
+            println!(
+                "{}",
+                success(&format!("Contract address: {}", contract_address))
+            );
+        }
+    }
 
     if !cli.quiet {
         println!(
@@ -1147,18 +1328,49 @@ fn handle_cairo_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
                 deploy_timer.elapsed()
             ))
         );
-        summary.add_operation(&format!(
-            "Cairo verifier deployed with class hash: {}",
-            hash
-        ));
+        let mut operation = format!("Cairo verifier deployed with class hash: {}", hash);
+        if !contract_address.is_empty() {
+            operation = format!("Cairo verifier deployed at address: {}", contract_address);
+        }
+        summary.add_operation(&operation);
         summary.print();
     }
 
     Ok(())
 }
 
-fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
+fn handle_cairo_verify_onchain(cli: &Cli, address: Option<&str>) -> Result<()> {
     let mut summary = OperationSummary::new();
+
+    // Get contract address from parameter or from saved file
+    let contract_address = match address {
+        Some(addr) => addr.to_string(),
+        None => {
+            // Try to read contract address from file saved by deploy command
+            match std::fs::read_to_string("target/starknet/.bargo_contract_address") {
+                Ok(saved_address) => {
+                    let addr = saved_address.trim().to_string();
+                    if !cli.quiet {
+                        println!(
+                            "{}",
+                            success(&format!("Using saved contract address: {}", addr))
+                        );
+                    }
+                    addr
+                }
+                Err(_) => {
+                    return Err(create_smart_error(
+                        "Contract address is required for verification",
+                        &[
+                            "Provide a contract address with --address <ADDRESS>",
+                            "Or run 'bargo cairo deploy' first to save the contract address",
+                            "The deploy command will save the contract address for verification",
+                        ],
+                    ));
+                }
+            }
+        }
+    };
 
     // Validate that required Starknet artifacts exist
     let required_files = vec![
@@ -1181,8 +1393,12 @@ fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
 
     let garaga_args = vec![
         "verify-onchain",
-        "--address",
-        address,
+        "--system",
+        "ultra_starknet_zk_honk",
+        "--contract-address",
+        &contract_address,
+        "--network",
+        "mainnet",
         "--vk",
         &vk_str,
         "--proof",
@@ -1193,7 +1409,7 @@ fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
 
     if cli.verbose {
         info!("Running: garaga {}", garaga_args.join(" "));
-        info!("Verifying proof on-chain at address: {}", address);
+        info!("Verifying proof on-chain at address: {}", contract_address);
     }
 
     if cli.dry_run {
@@ -1214,7 +1430,7 @@ fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
         );
         summary.add_operation(&format!(
             "On-chain verification completed at address: {}",
-            address
+            contract_address
         ));
         summary.print();
     }
