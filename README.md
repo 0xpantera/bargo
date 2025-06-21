@@ -27,6 +27,7 @@ bargo prove         # ← prove + write_vk + verify (unless --skip-verify)
 bargo solidity      # ← write_vk (keccak) + write_solidity_verifier
 bargo verify        # ← explicit re-verification
 bargo clean         # ← rm -rf target/
+bargo rebuild       # ← clean + build in one step
 ```
 
 ## Command Specification
@@ -39,6 +40,7 @@ bargo clean         # ← rm -rf target/
 | `bargo verify` | `bb verify` | Re-verify existing proof | 📁 Auto-detect proof/vk paths |
 | `bargo solidity` | `bb write_vk --oracle_hash keccak` + `bb write_solidity_verifier` | Generate Solidity verifier contract | 🎯 Optimized for Ethereum deployment |
 | `bargo clean` | `rm -rf target/` | Remove all build artifacts | 🧹 Fresh start for debugging |
+| `bargo rebuild` | `rm -rf target/` + `nargo execute` | Clean and rebuild from scratch | 🔄 Combined clean + build operation |
 
 ### Global Flags
 
@@ -56,6 +58,7 @@ bargo clean         # ← rm -rf target/
 - [x] `bargo verify` - bb verify wrapper
 - [x] `bargo solidity` - Solidity verifier generation
 - [x] `bargo clean` - target directory cleanup
+- [x] `bargo rebuild` - clean + build in one command
 
 ### CLI Infrastructure  
 - [x] Clap-based command parsing
@@ -69,10 +72,9 @@ bargo clean         # ← rm -rf target/
 - [x] Find project root (walk up directory tree for `Nargo.toml`)
 - [x] Validate required files exist before running commands
 
-### Smart Rebuilds
-- [x] Track file timestamps (`src/` vs `target/` freshness)
-- [x] Auto-clean when `Nargo.toml` or source files change
-- [x] Dependency-aware invalidation
+### Smart Features
+- [x] Smart rebuilds - Track file timestamps, auto-clean and rebuild when needed
+- [x] Dependency-aware invalidation - Detect changes in `Nargo.toml` or source files
 - [x] `bargo build` automatically handles stale artifacts
 
 ### User Experience
@@ -80,6 +82,9 @@ bargo clean         # ← rm -rf target/
 - [x] Verbose logging shows actual commands executed
 - [x] Helpful error messages with suggested fixes
 - [x] Integration tests with real Noir project
+- [x] ASCII art headers - Aesthetic section separators for command output
+- [x] File sizes & timing - Show file sizes and operation duration for all commands
+- [x] Operation summaries - Professional summary showing what was accomplished
 
 ## Installation
 
@@ -126,10 +131,13 @@ bargo prove        # ✓ New proof with updated circuit
 ### Debugging Workflow
 
 ```bash
-bargo clean        # 🧹 Removed target/
-bargo build        # ✓ Fresh build
+bargo rebuild      # 🔄 Clean + build in one step
 bargo prove --skip-verify  # ⚡ Skip verification for faster iteration
 bargo verify       # ✅ Verify when ready
+
+# Or step-by-step:
+bargo clean        # 🧹 Removed target/
+bargo build        # ✓ Fresh build
 ```
 
 ## Technical Implementation
@@ -166,18 +174,10 @@ bargo/
 ## Future Roadmap
 
 ### Smart Features
-- [x] **Smart rebuilds**: Track file timestamps - if `src/` files are newer than `target/` files, auto-clean and rebuild
-- [x] **Dependency-aware**: If `Nargo.toml` or source files change, invalidate derived artifacts  
-- [ ] **`bargo rebuild`**: Clean + build in one command
 - [ ] **Parallel execution**: Run independent bb commands concurrently
 
 ### Advanced UX
 - [ ] **Progress bars**: Show progress for long-running operations (using `indicatif`)
-- [x] **ASCII art headers**: Aesthetic section separators for command output
-- [x] **File sizes & timing**: Show file sizes and operation duration for all commands
-- [x] **Operation summaries**: Professional summary showing what was accomplished
-- [x] **Enhanced error messages**: Smart error messages with actionable suggestions
-- [x] **Colored output**: Green/red/blue colored text throughout the interface
 - [ ] **Tool version detection**: Show nargo/bb versions in verbose mode
 - [ ] **Better dry-run visualization**: Enhanced workflow preview with dependencies
 - [ ] **Auto-completion**: Shell completion for bash/zsh/fish
