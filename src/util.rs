@@ -3,6 +3,15 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
+/// Backend flavour for artifact generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Flavour {
+    /// Barretenberg backend (EVM/Solidity)
+    Bb,
+    /// Starknet backend (Cairo)
+    Starknet,
+}
+
 /// Find the project root by walking up the directory tree looking for Nargo.toml
 pub fn find_project_root(current_path: &Path) -> Result<PathBuf> {
     for path in current_path.ancestors() {
@@ -75,34 +84,168 @@ pub fn parse_package_name(nargo_toml_path: &Path) -> Result<String> {
     }
 }
 
-/// Get the target directory path (always returns "target" for now)
+/// Get the target directory path for a specific backend flavour
+pub fn target_dir(flavour: Flavour) -> PathBuf {
+    match flavour {
+        Flavour::Bb => PathBuf::from("target/bb"),
+        Flavour::Starknet => PathBuf::from("target/starknet"),
+    }
+}
+
+/// Get the target directory path (defaults to bb backend for compatibility)
 pub fn workspace_target() -> PathBuf {
-    PathBuf::from("target")
+    target_dir(Flavour::Bb)
 }
 
-/// Get the bytecode file path for a package
-pub fn get_bytecode_path(pkg_name: &str) -> PathBuf {
-    workspace_target().join(format!("{}.json", pkg_name))
+/// Get the bytecode file path for a package with specific backend flavour
+pub fn get_bytecode_path(pkg_name: &str, flavour: Flavour) -> PathBuf {
+    target_dir(flavour).join(format!("{}.json", pkg_name))
 }
 
-/// Get the witness file path for a package
-pub fn get_witness_path(pkg_name: &str) -> PathBuf {
-    workspace_target().join(format!("{}.gz", pkg_name))
+/// Get the witness file path for a package with specific backend flavour
+pub fn get_witness_path(pkg_name: &str, flavour: Flavour) -> PathBuf {
+    target_dir(flavour).join(format!("{}.gz", pkg_name))
 }
 
-/// Get the proof file path
-pub fn get_proof_path() -> PathBuf {
-    workspace_target().join("proof")
+/// Get the proof file path for specific backend flavour
+pub fn get_proof_path(flavour: Flavour) -> PathBuf {
+    target_dir(flavour).join("proof")
 }
 
-/// Get the verification key file path
-pub fn get_vk_path() -> PathBuf {
-    workspace_target().join("vk")
+/// Get the verification key file path for specific backend flavour
+pub fn get_vk_path(flavour: Flavour) -> PathBuf {
+    target_dir(flavour).join("vk")
 }
 
-/// Get the public inputs file path
-pub fn get_public_inputs_path() -> PathBuf {
-    workspace_target().join("public_inputs")
+/// Get the public inputs file path for specific backend flavour
+pub fn get_public_inputs_path(flavour: Flavour) -> PathBuf {
+    target_dir(flavour).join("public_inputs")
+}
+
+/// Organize build artifacts by moving nargo output to appropriate flavour directory
+pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> {
+    // Create the target directory for the flavour if it doesn't exist
+    let flavour_dir = target_dir(flavour);
+    std::fs::create_dir_all(&flavour_dir).map_err(|e| {
+        color_eyre::eyre::eyre!(
+            "Failed to create target directory {}: {}",
+            flavour_dir.display(),
+            e
+        )
+    })?;
+
+    // Move bytecode file from target/ to target/flavour/
+    let source_bytecode = PathBuf::from("target").join(format!("{}.json", pkg_name));
+    let dest_bytecode = get_bytecode_path(pkg_name, flavour);
+
+    if source_bytecode.exists() {
+        std::fs::rename(&source_bytecode, &dest_bytecode).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_bytecode.display(),
+                dest_bytecode.display(),
+                e
+            )
+        })?;
+        debug!(
+            "Moved bytecode: {} -> {}",
+            source_bytecode.display(),
+            dest_bytecode.display()
+        );
+    }
+
+    // Move witness file from target/ to target/flavour/
+    let source_witness = PathBuf::from("target").join(format!("{}.gz", pkg_name));
+    let dest_witness = get_witness_path(pkg_name, flavour);
+
+    if source_witness.exists() {
+        std::fs::rename(&source_witness, &dest_witness).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_witness.display(),
+                dest_witness.display(),
+                e
+            )
+        })?;
+        debug!(
+            "Moved witness: {} -> {}",
+            source_witness.display(),
+            dest_witness.display()
+        );
+    }
+
+    Ok(())
+}
+
+/// Organize bb artifacts by moving bb output to appropriate flavour directory
+pub fn organize_bb_artifacts(flavour: Flavour) -> Result<()> {
+    // Create the target directory for the flavour if it doesn't exist
+    let flavour_dir = target_dir(flavour);
+    std::fs::create_dir_all(&flavour_dir).map_err(|e| {
+        color_eyre::eyre::eyre!(
+            "Failed to create target directory {}: {}",
+            flavour_dir.display(),
+            e
+        )
+    })?;
+
+    // Move proof file from target/ to target/flavour/
+    let source_proof = PathBuf::from("target/proof");
+    let dest_proof = get_proof_path(flavour);
+
+    if source_proof.exists() {
+        std::fs::rename(&source_proof, &dest_proof).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_proof.display(),
+                dest_proof.display(),
+                e
+            )
+        })?;
+        debug!(
+            "Moved proof: {} -> {}",
+            source_proof.display(),
+            dest_proof.display()
+        );
+    }
+
+    // Move vk file from target/ to target/flavour/
+    let source_vk = PathBuf::from("target/vk");
+    let dest_vk = get_vk_path(flavour);
+
+    if source_vk.exists() {
+        std::fs::rename(&source_vk, &dest_vk).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_vk.display(),
+                dest_vk.display(),
+                e
+            )
+        })?;
+        debug!("Moved vk: {} -> {}", source_vk.display(), dest_vk.display());
+    }
+
+    // Move public_inputs file from target/ to target/flavour/
+    let source_public_inputs = PathBuf::from("target/public_inputs");
+    let dest_public_inputs = get_public_inputs_path(flavour);
+
+    if source_public_inputs.exists() {
+        std::fs::rename(&source_public_inputs, &dest_public_inputs).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_public_inputs.display(),
+                dest_public_inputs.display(),
+                e
+            )
+        })?;
+        debug!(
+            "Moved public_inputs: {} -> {}",
+            source_public_inputs.display(),
+            dest_public_inputs.display()
+        );
+    }
+
+    Ok(())
 }
 
 /// Validate that required files exist for a given operation
@@ -137,8 +280,8 @@ pub fn needs_rebuild(pkg_name: &str) -> Result<bool> {
     let project_root = find_project_root(&current_dir)?;
 
     // Check if target files exist
-    let bytecode_path = get_bytecode_path(pkg_name);
-    let witness_path = get_witness_path(pkg_name);
+    let bytecode_path = get_bytecode_path(pkg_name, Flavour::Bb);
+    let witness_path = get_witness_path(pkg_name, Flavour::Bb);
 
     if !bytecode_path.exists() || !witness_path.exists() {
         debug!("Target files don't exist, rebuild needed");
