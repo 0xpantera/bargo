@@ -61,12 +61,12 @@ bargo rebuild       # ← clean + build in one step
 - [x] `bargo rebuild` - clean + build in one command (with `--backend` support)
 - [x] `bargo doctor` - dependency verification tool
 
-### Cairo Commands (requires garaga)
-- [x] `bargo cairo gen` - generate Cairo verifier contract for Starknet
-- [x] `bargo cairo data` - generate calldata JSON for proof verification
-- [x] `bargo cairo declare` - declare verifier contract on Starknet
-- [x] `bargo cairo deploy` - deploy declared verifier contract
-- [x] `bargo cairo verify-onchain` - verify proof on-chain using deployed verifier
+### Cairo Commands (requires garaga) - ✅ FULLY TESTED ON MAINNET
+- [x] `bargo cairo gen` - generate optimized Cairo verifier contract for Starknet
+- [x] `bargo cairo data` - generate calldata JSON for proof verification  
+- [x] `bargo cairo declare` - declare verifier contract on Starknet (auto-saves class hash)
+- [x] `bargo cairo deploy` - deploy declared verifier contract (auto-uses saved class hash)
+- [x] `bargo cairo verify-onchain` - verify proof on-chain using deployed verifier (auto-uses saved contract address)
 
 ### CLI Infrastructure  
 - [x] Clap-based command parsing
@@ -116,11 +116,31 @@ For Cairo verifier generation and Starknet deployment features, you'll also need
 # Install garaga (requires Python 3.10+)
 pipx install garaga
 
+# Or with pip in a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install garaga
+
 # Verify installation
 garaga --help
 ```
 
 **Note**: All EVM/Solidity features work without garaga. Cairo features (`bargo cairo ...`) require garaga to be installed.
+
+#### Starknet Environment Setup
+
+Create a `.secrets` file in your project root for Starknet deployment:
+
+```bash
+# .secrets file format
+SEPOLIA_RPC_URL="https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/your_key"
+SEPOLIA_ACCOUNT_PRIVATE_KEY=0x...
+SEPOLIA_ACCOUNT_ADDRESS=0x...
+
+MAINNET_RPC_URL="https://starknet-mainnet.g.alchemy.com/starknet/version/rpc/v0_8/your_key"  
+MAINNET_ACCOUNT_PRIVATE_KEY=0x...
+MAINNET_ACCOUNT_ADDRESS=0x...
+```
 
 ## Usage Examples
 
@@ -152,22 +172,37 @@ bargo verifier     # ✓ VK (keccak) → target/bb/vk
                    # ✓ Verifier contract → contracts/Verifier.sol
 ```
 
-### Cairo/Starknet Workflow (requires garaga)
+### Cairo/Starknet Workflow (requires garaga) - ✅ PRODUCTION READY
+
+**Complete End-to-End Workflow:**
 
 ```bash
-# Generate Cairo verifier
-bargo cairo gen    # ✓ Keccak proof → target/starknet/proof (13.8 KB)
-                   # ✓ Keccak VK → target/starknet/vk (1.7 KB)  
-                   # ✓ Cairo verifier → contracts/Verifier.cairo (45.2 KB)
+# 1. Generate optimized Cairo verifier (uses ultra_starknet_zk_honk + --zk flag)
+bargo cairo gen    # ✓ Starknet proof → target/starknet/proof (15.8 KB)
+                   # ✓ Starknet VK → target/starknet/vk (1.7 KB)  
+                   # ✓ Cairo verifier → contracts/Verifier.cairo (11.2 KB)
+                   # ✓ Optimized for maximum gas efficiency
 
-# Generate calldata for verification
-bargo cairo data   # ✓ Calldata JSON output
+# 2. Generate calldata for verification  
+bargo cairo data   # ✓ Calldata JSON output (thousands of field elements)
 
-# Deploy to Starknet
-bargo cairo declare                    # ✓ Contract declared → class hash: 0x1234...
-bargo cairo deploy --class-hash 0x1234...  # ✓ Contract deployed → address: 0xabcd...
-bargo cairo verify-onchain -a 0xabcd...    # ✅ Proof verified on-chain
+# 3. Seamless deployment workflow (no manual copying needed!)
+bargo cairo declare --network mainnet     # ✓ Contract declared → auto-saves class hash
+bargo cairo deploy                        # ✓ Contract deployed → auto-uses saved class hash  
+bargo cairo verify-onchain               # ✅ Proof verified on-chain → auto-uses saved address
+
+# Real example from successful mainnet deployment:
+# ✓ Class hash: 0x5ff378cb2f16804539ecb92e84f273aafbab57d450530e9fe8e87771705a673
+# ✓ Contract: 0x65bf3f2391439511353ca05dda89acaa82956ad7f871152f345b7917e0a2f34  
+# ✓ Verification TX: 0x59c37878e8851336a75e0d6eb0c49977de74a8264e52b75e8d2e449cf1365ba
 ```
+
+**Key Features:**
+- **Maximum Optimization**: Uses `ultra_starknet_zk_honk` system with proper `--zk` flag
+- **Auto State Management**: Class hashes and contract addresses saved automatically
+- **Network Selection**: `--network mainnet` or `--network sepolia` 
+- **Error Handling**: Honest feedback - no fake success messages
+- **Gas Efficient**: Starknet-optimized proofs reduce deployment costs
 
 ### Development Iteration
 
@@ -284,12 +319,37 @@ cd wkshp
 ../target/debug/bargo prove
 ```
 
+## Production-Ready Cairo/Starknet Integration
+
+bargo has been **successfully tested end-to-end** on Starknet mainnet with real contract deployments and proof verifications. The Cairo integration provides:
+
+### 🎯 **Optimization Levels**
+- `ultra_keccak_honk` - Standard Keccak-based proofs  
+- `ultra_starknet_honk` - Starknet-optimized with Poseidon hash
+- `ultra_starknet_zk_honk` - **Maximum optimization** with ZK proofs (recommended)
+
+### 🔄 **Seamless State Management**  
+- Class hashes automatically saved in `target/starknet/.bargo_class_hash`
+- Contract addresses automatically saved in `target/starknet/.bargo_contract_address`
+- No manual copying of hashes between commands
+
+### ⚡ **Gas Optimization**
+- Starknet-native hash functions reduce verification costs
+- ZK proofs minimize contract bytecode size
+- Proper `bb prove -s ultra_honk --oracle_hash starknet --zk` flags
+
+### 🛡️ **Reliable Error Handling**
+- Honest failure reporting (no fake success messages)
+- Helpful troubleshooting suggestions
+- Network-aware error detection
+
 ## Target User Persona
 
-- **Web3/crypto developer** with ZK curiosity
-- **Comfortable with Rust & command lines** but not with Barretenberg's arcane flags  
-- **Appreciates lavish terminal UX**: colors, emojis, verbose explanations
-- **Values developer velocity** over micro-optimizations
+- **Web3/crypto developer** building ZK applications on Ethereum and Starknet
+- **Comfortable with Rust & command lines** but wants simplified ZK tooling
+- **Appreciates lavish terminal UX**: colors, emojis, verbose explanations  
+- **Values developer velocity** and reliable end-to-end workflows
+- **Needs production-ready ZK verification** on both EVM and Starknet
 
 ---
 
