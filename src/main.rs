@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use color_eyre::Result;
 use tracing::{info, warn};
 
@@ -6,7 +6,7 @@ mod backends;
 mod util;
 
 use util::{
-    OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions,
+    Flavour, OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions,
     format_operation_result, info, path, print_banner, success,
 };
 
@@ -61,17 +61,73 @@ enum Commands {
     #[command(about = "Verify an existing proof using bb verify")]
     Verify,
 
-    /// Generate Solidity verifier contract
+    /// Generate verifier contract
     #[command(about = "Generate Solidity verifier contract optimized for Ethereum deployment")]
-    Solidity,
+    Verifier,
 
     /// Clean build artifacts
     #[command(about = "Remove target directory and all build artifacts")]
-    Clean,
+    Clean {
+        /// Backend to clean (defaults to all)
+        #[arg(long, value_enum)]
+        backend: Option<Backend>,
+    },
 
     /// Clean and rebuild (equivalent to clean + build)
     #[command(about = "Remove target directory and rebuild from scratch")]
-    Rebuild,
+    Rebuild {
+        /// Backend to clean (defaults to all)
+        #[arg(long, value_enum)]
+        backend: Option<Backend>,
+    },
+
+    /// Cairo/Starknet operations
+    #[command(about = "Generate Cairo verifiers and interact with Starknet")]
+    Cairo {
+        #[command(subcommand)]
+        command: CairoCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum CairoCommands {
+    /// Generate Cairo verifier contract
+    #[command(about = "Generate Cairo verifier contract for Starknet deployment")]
+    Gen,
+
+    /// Generate calldata for proof verification
+    #[command(about = "Generate calldata JSON for latest proof")]
+    Data,
+
+    /// Declare verifier contract on Starknet
+    #[command(about = "Declare verifier contract on Starknet")]
+    Declare,
+
+    /// Deploy declared verifier contract
+    #[command(about = "Deploy declared verifier contract")]
+    Deploy {
+        /// Class hash of the declared contract
+        #[arg(long)]
+        class_hash: Option<String>,
+    },
+
+    /// Verify proof on-chain
+    #[command(about = "Verify proof on Starknet using deployed verifier")]
+    VerifyOnchain {
+        /// Address of deployed verifier contract
+        #[arg(short = 'a', long)]
+        address: String,
+    },
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum Backend {
+    /// Barretenberg backend (EVM/Solidity)
+    Bb,
+    /// Starknet backend (Cairo)
+    Starknet,
+    /// All backends
+    All,
 }
 
 fn main() -> Result<()> {
@@ -119,24 +175,56 @@ fn main() -> Result<()> {
             }
             handle_verify(&cli)?;
         }
-        Commands::Solidity => {
+        Commands::Verifier => {
             if !cli.quiet {
-                print_banner("solidity");
+                print_banner("verifier");
             }
-            handle_solidity(&cli)?;
+            handle_verifier(&cli)?;
         }
-        Commands::Clean => {
+        Commands::Clean { ref backend } => {
             if !cli.quiet {
                 print_banner("clean");
             }
-            handle_clean(&cli)?;
+            handle_clean(&cli, backend.unwrap_or(Backend::All))?;
         }
-        Commands::Rebuild => {
+        Commands::Rebuild { ref backend } => {
             if !cli.quiet {
                 print_banner("rebuild");
             }
-            handle_rebuild(&cli)?;
+            handle_rebuild(&cli, backend.unwrap_or(Backend::All))?;
         }
+        Commands::Cairo { ref command } => match command {
+            CairoCommands::Gen => {
+                if !cli.quiet {
+                    print_banner("cairo gen");
+                }
+                handle_cairo_gen(&cli)?;
+            }
+            CairoCommands::Data => {
+                if !cli.quiet {
+                    print_banner("cairo data");
+                }
+                handle_cairo_data(&cli)?;
+            }
+            CairoCommands::Declare => {
+                if !cli.quiet {
+                    print_banner("cairo declare");
+                }
+                handle_cairo_declare(&cli)?;
+            }
+            CairoCommands::Deploy { class_hash } => {
+                if !cli.quiet {
+                    print_banner("cairo deploy");
+                }
+                handle_cairo_deploy(&cli, class_hash.as_deref())?;
+            }
+            CairoCommands::VerifyOnchain { address } => {
+                if !cli.quiet {
+                    print_banner("cairo verify-onchain");
+                }
+                handle_cairo_verify_onchain(&cli, &address)?;
+            }
+        },
     }
 
     if cli.verbose {
@@ -228,9 +316,12 @@ fn handle_build(cli: &Cli) -> Result<()> {
 
     match result {
         Ok(()) => {
+            // Organize build artifacts into flavour-specific directories
+            util::organize_build_artifacts(&pkg_name, Flavour::Bb)?;
+
             if !cli.quiet {
-                let bytecode_path = util::get_bytecode_path(&pkg_name);
-                let witness_path = util::get_witness_path(&pkg_name);
+                let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
+                let witness_path = util::get_witness_path(&pkg_name, Flavour::Bb);
 
                 println!(
                     "{}",
@@ -275,8 +366,8 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
 
     // Validate that required build files exist
     let required_files = vec![
-        util::get_bytecode_path(&pkg_name),
-        util::get_witness_path(&pkg_name),
+        util::get_bytecode_path(&pkg_name, Flavour::Bb),
+        util::get_witness_path(&pkg_name, Flavour::Bb),
     ];
 
     if !cli.dry_run {
@@ -284,8 +375,8 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
     }
 
     // Build bb prove arguments
-    let bytecode_path = util::get_bytecode_path(&pkg_name);
-    let witness_path = util::get_witness_path(&pkg_name);
+    let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
+    let witness_path = util::get_witness_path(&pkg_name, Flavour::Bb);
     let bytecode_str = bytecode_path.to_string_lossy();
     let witness_str = witness_path.to_string_lossy();
 
@@ -296,7 +387,7 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
         "-w",
         &witness_str,
         "-o",
-        "./target/",
+        "./target/bb/",
     ];
 
     if cli.verbose {
@@ -306,19 +397,30 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
     if cli.dry_run {
         println!("Would run: bb {}", prove_args.join(" "));
         if !skip_verify {
-            let vk_args = vec!["write_vk", "-b", &bytecode_str, "-o", "./target/"];
+            let vk_args = vec!["write_vk", "-b", &bytecode_str, "-o", "./target/bb/"];
             println!("Would run: bb {}", vk_args.join(" "));
-            println!("Would run: bb verify -k ./target/vk -p ./target/proof");
+            println!("Would run: bb verify -k ./target/bb/vk -p ./target/bb/proof");
         }
         return Ok(());
     }
+
+    // Create target/bb directory if it doesn't exist
+    std::fs::create_dir_all("./target/bb").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create target/bb directory: {}", e),
+            &[
+                "Check directory permissions",
+                "Ensure you have write access to the current directory",
+            ],
+        )
+    })?;
 
     // Run bb prove
     let prove_timer = Timer::start();
     backends::bb::run(&prove_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        let proof_path = util::get_proof_path();
+        let proof_path = util::get_proof_path(Flavour::Bb);
         println!(
             "{}",
             success(&format_operation_result(
@@ -334,7 +436,7 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
     }
 
     // Generate verification key
-    let vk_args = vec!["write_vk", "-b", &bytecode_str, "-o", "./target/"];
+    let vk_args = vec!["write_vk", "-b", &bytecode_str, "-o", "./target/bb/"];
 
     if cli.verbose {
         info!("Running: bb {}", vk_args.join(" "));
@@ -344,7 +446,7 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
     backends::bb::run(&vk_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        let vk_path = util::get_vk_path();
+        let vk_path = util::get_vk_path(Flavour::Bb);
         println!(
             "{}",
             success(&format_operation_result("VK saved", &vk_path, &vk_timer))
@@ -357,11 +459,21 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
 
     // Verify proof unless skipped
     if !skip_verify {
-        let proof_path = util::get_proof_path();
-        let vk_path = util::get_vk_path();
+        let proof_path = util::get_proof_path(Flavour::Bb);
+        let vk_path = util::get_vk_path(Flavour::Bb);
+        let public_inputs_path = util::get_public_inputs_path(Flavour::Bb);
         let vk_str = vk_path.to_string_lossy();
         let proof_str = proof_path.to_string_lossy();
-        let verify_args = vec!["verify", "-k", &vk_str, "-p", &proof_str];
+        let public_inputs_str = public_inputs_path.to_string_lossy();
+        let verify_args = vec![
+            "verify",
+            "-k",
+            &vk_str,
+            "-p",
+            &proof_str,
+            "-i",
+            &public_inputs_str,
+        ];
 
         if cli.verbose {
             info!("Running: bb {}", verify_args.join(" "));
@@ -387,17 +499,31 @@ fn handle_prove(cli: &Cli, skip_verify: bool) -> Result<()> {
 
 fn handle_verify(cli: &Cli) -> Result<()> {
     // Validate that required files exist
-    let required_files = vec![util::get_proof_path(), util::get_vk_path()];
+    let required_files = vec![
+        util::get_proof_path(Flavour::Bb),
+        util::get_vk_path(Flavour::Bb),
+        util::get_public_inputs_path(Flavour::Bb),
+    ];
 
     if !cli.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
-    let proof_path = util::get_proof_path();
-    let vk_path = util::get_vk_path();
+    let proof_path = util::get_proof_path(Flavour::Bb);
+    let vk_path = util::get_vk_path(Flavour::Bb);
+    let public_inputs_path = util::get_public_inputs_path(Flavour::Bb);
     let vk_str = vk_path.to_string_lossy();
     let proof_str = proof_path.to_string_lossy();
-    let verify_args = vec!["verify", "-k", &vk_str, "-p", &proof_str];
+    let public_inputs_str = public_inputs_path.to_string_lossy();
+    let verify_args = vec![
+        "verify",
+        "-k",
+        &vk_str,
+        "-p",
+        &proof_str,
+        "-i",
+        &public_inputs_str,
+    ];
 
     if cli.verbose {
         info!("Running: bb {}", verify_args.join(" "));
@@ -424,19 +550,19 @@ fn handle_verify(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn handle_solidity(cli: &Cli) -> Result<()> {
+fn handle_verifier(cli: &Cli) -> Result<()> {
     let pkg_name = get_package_name(cli).map_err(enhance_error_with_suggestions)?;
     let mut summary = OperationSummary::new();
 
     // Validate that required build files exist
-    let required_files = vec![util::get_bytecode_path(&pkg_name)];
+    let required_files = vec![util::get_bytecode_path(&pkg_name, Flavour::Bb)];
 
     if !cli.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
     // Generate VK with keccak oracle hash for Solidity optimization
-    let bytecode_path = util::get_bytecode_path(&pkg_name);
+    let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
     let bytecode_str = bytecode_path.to_string_lossy();
     let vk_args = vec![
         "write_vk",
@@ -445,7 +571,7 @@ fn handle_solidity(cli: &Cli) -> Result<()> {
         "-b",
         &bytecode_str,
         "-o",
-        "./target/",
+        "./target/bb/",
     ];
 
     if cli.verbose {
@@ -455,16 +581,27 @@ fn handle_solidity(cli: &Cli) -> Result<()> {
     if cli.dry_run {
         println!("Would run: bb {}", vk_args.join(" "));
         println!(
-            "Would run: bb write_solidity_verifier -k ./target/vk -o ./contracts/Verifier.sol"
+            "Would run: bb write_solidity_verifier -k ./target/bb/vk -o ./contracts/Verifier.sol"
         );
         return Ok(());
     }
+
+    // Create target/bb directory if it doesn't exist
+    std::fs::create_dir_all("./target/bb").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create target/bb directory: {}", e),
+            &[
+                "Check directory permissions",
+                "Ensure you have write access to the current directory",
+            ],
+        )
+    })?;
 
     let vk_timer = Timer::start();
     backends::bb::run(&vk_args).map_err(enhance_error_with_suggestions)?;
 
     if !cli.quiet {
-        let vk_path = util::get_vk_path();
+        let vk_path = util::get_vk_path(Flavour::Bb);
         println!(
             "{}",
             success(&format_operation_result(
@@ -491,7 +628,7 @@ fn handle_solidity(cli: &Cli) -> Result<()> {
     })?;
 
     // Generate Solidity verifier
-    let vk_path = util::get_vk_path();
+    let vk_path = util::get_vk_path(Flavour::Bb);
     let vk_str = vk_path.to_string_lossy();
     let solidity_args = vec![
         "write_solidity_verifier",
@@ -528,24 +665,62 @@ fn handle_solidity(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn handle_clean(cli: &Cli) -> Result<()> {
+fn handle_clean(cli: &Cli, backend: Backend) -> Result<()> {
     if cli.verbose {
-        info!("Removing target directory");
+        info!("Cleaning artifacts for backend: {:?}", backend);
     }
 
-    if cli.dry_run {
-        println!("Would run: rm -rf target/");
-        return Ok(());
-    }
+    match backend {
+        Backend::All => {
+            if cli.dry_run {
+                println!("Would run: rm -rf target/");
+                return Ok(());
+            }
 
-    if std::path::Path::new("target").exists() {
-        std::fs::remove_dir_all("target")?;
-        if !cli.quiet {
-            println!("{}", success("Removed target/"));
+            if std::path::Path::new("target").exists() {
+                std::fs::remove_dir_all("target")?;
+                if !cli.quiet {
+                    println!("{}", success("Removed target/"));
+                }
+            } else {
+                if !cli.quiet {
+                    println!("{}", info("target/ already clean"));
+                }
+            }
         }
-    } else {
-        if !cli.quiet {
-            println!("{}", info("target/ already clean"));
+        Backend::Bb => {
+            if cli.dry_run {
+                println!("Would run: rm -rf target/bb/");
+                return Ok(());
+            }
+
+            if std::path::Path::new("target/bb").exists() {
+                std::fs::remove_dir_all("target/bb")?;
+                if !cli.quiet {
+                    println!("{}", success("Removed target/bb/"));
+                }
+            } else {
+                if !cli.quiet {
+                    println!("{}", info("target/bb/ already clean"));
+                }
+            }
+        }
+        Backend::Starknet => {
+            if cli.dry_run {
+                println!("Would run: rm -rf target/starknet/");
+                return Ok(());
+            }
+
+            if std::path::Path::new("target/starknet").exists() {
+                std::fs::remove_dir_all("target/starknet")?;
+                if !cli.quiet {
+                    println!("{}", success("Removed target/starknet/"));
+                }
+            } else {
+                if !cli.quiet {
+                    println!("{}", info("target/starknet/ already clean"));
+                }
+            }
         }
     }
 
@@ -564,32 +739,21 @@ fn build_nargo_args(cli: &Cli, base_args: &[&str]) -> Result<Vec<String>> {
     Ok(args)
 }
 
-fn handle_rebuild(cli: &Cli) -> Result<()> {
+fn handle_rebuild(cli: &Cli, backend: Backend) -> Result<()> {
     let mut summary = OperationSummary::new();
 
     // Step 1: Clean
     if cli.verbose {
-        info!("Step 1/2: Cleaning target directory");
+        info!("Step 1/2: Cleaning artifacts for backend: {:?}", backend);
     }
 
     if !cli.quiet {
         println!("🧹 Cleaning build artifacts...");
     }
 
-    if cli.dry_run {
-        println!("Would run: rm -rf target/");
-    } else {
-        if std::path::Path::new("target").exists() {
-            std::fs::remove_dir_all("target")?;
-            if !cli.quiet {
-                println!("{}", success("Removed target/"));
-            }
-            summary.add_operation("Target directory cleaned");
-        } else {
-            if !cli.quiet {
-                println!("{}", info("target/ already clean"));
-            }
-        }
+    handle_clean(cli, backend)?;
+    if backend != Backend::Starknet {
+        summary.add_operation("Build artifacts cleaned");
     }
 
     // Step 2: Build
@@ -618,9 +782,12 @@ fn handle_rebuild(cli: &Cli) -> Result<()> {
 
     match result {
         Ok(()) => {
+            // Organize build artifacts into flavour-specific directories
+            util::organize_build_artifacts(&pkg_name, Flavour::Bb)?;
+
             if !cli.quiet {
-                let bytecode_path = util::get_bytecode_path(&pkg_name);
-                let witness_path = util::get_witness_path(&pkg_name);
+                let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
+                let witness_path = util::get_witness_path(&pkg_name, Flavour::Bb);
 
                 println!(
                     "{}",
@@ -657,6 +824,392 @@ fn handle_rebuild(cli: &Cli) -> Result<()> {
         }
         Err(e) => Err(enhance_error_with_suggestions(e)),
     }
+}
+
+fn handle_cairo_gen(cli: &Cli) -> Result<()> {
+    let pkg_name = get_package_name(cli)?;
+    let mut summary = OperationSummary::new();
+
+    // Validate that required build files exist (from regular build)
+    let required_files = vec![
+        util::get_bytecode_path(&pkg_name, Flavour::Bb),
+        util::get_witness_path(&pkg_name, Flavour::Bb),
+    ];
+
+    if !cli.dry_run {
+        util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
+    }
+
+    // Create target/starknet directory if it doesn't exist
+    std::fs::create_dir_all("./target/starknet").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create target/starknet directory: {}", e),
+            &[
+                "Check directory permissions",
+                "Ensure you have write access to the current directory",
+            ],
+        )
+    })?;
+
+    // Generate keccak-flavoured proof in target/starknet/
+    let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
+    let witness_path = util::get_witness_path(&pkg_name, Flavour::Bb);
+    let bytecode_str = bytecode_path.to_string_lossy();
+    let witness_str = witness_path.to_string_lossy();
+
+    let prove_args = vec![
+        "prove",
+        "-b",
+        &bytecode_str,
+        "-w",
+        &witness_str,
+        "-o",
+        "./target/starknet/",
+        "--oracle_hash",
+        "keccak",
+    ];
+
+    if cli.verbose {
+        info!("Running: bb {}", prove_args.join(" "));
+    }
+
+    if cli.dry_run {
+        println!("Would run: bb {}", prove_args.join(" "));
+        let vk_args = vec![
+            "write_vk",
+            "-b",
+            &bytecode_str,
+            "-o",
+            "./target/starknet/",
+            "--oracle_hash",
+            "keccak",
+        ];
+        println!("Would run: bb {}", vk_args.join(" "));
+        println!(
+            "Would run: garaga gen --system ultra_keccak_honk --vk target/starknet/vk -o contracts/Verifier.cairo"
+        );
+        return Ok(());
+    }
+
+    // Run bb prove with keccak oracle
+    let prove_timer = Timer::start();
+    backends::bb::run(&prove_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        let proof_path = util::get_proof_path(Flavour::Starknet);
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "Keccak proof generated",
+                &proof_path,
+                &prove_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "Keccak proof generated ({})",
+            util::format_file_size(&proof_path)
+        ));
+    }
+
+    // Generate keccak-flavoured VK in target/starknet/
+    let vk_args = vec![
+        "write_vk",
+        "-b",
+        &bytecode_str,
+        "-o",
+        "./target/starknet/",
+        "--oracle_hash",
+        "keccak",
+    ];
+
+    if cli.verbose {
+        info!("Running: bb {}", vk_args.join(" "));
+    }
+
+    let vk_timer = Timer::start();
+    backends::bb::run(&vk_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        let vk_path = util::get_vk_path(Flavour::Starknet);
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "Keccak VK generated",
+                &vk_path,
+                &vk_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "Keccak verification key ({})",
+            util::format_file_size(&vk_path)
+        ));
+    }
+
+    // Create contracts directory if it doesn't exist
+    std::fs::create_dir_all("./contracts").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create contracts directory: {}", e),
+            &[
+                "Check directory permissions",
+                "Ensure you have write access to the current directory",
+            ],
+        )
+    })?;
+
+    // Generate Cairo verifier using garaga
+    let vk_path = util::get_vk_path(Flavour::Starknet);
+    let vk_str = vk_path.to_string_lossy();
+    let garaga_args = vec![
+        "gen",
+        "--system",
+        "ultra_keccak_honk",
+        "--vk",
+        &vk_str,
+        "-o",
+        "contracts/Verifier.cairo",
+    ];
+
+    if cli.verbose {
+        info!("Running: garaga {}", garaga_args.join(" "));
+    }
+
+    let garaga_timer = Timer::start();
+    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        let cairo_verifier_path = std::path::PathBuf::from("./contracts/Verifier.cairo");
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "Cairo verifier generated",
+                &cairo_verifier_path,
+                &garaga_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "Cairo verifier contract ({})",
+            util::format_file_size(&cairo_verifier_path)
+        ));
+        summary.print();
+    }
+
+    Ok(())
+}
+
+fn handle_cairo_data(cli: &Cli) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Validate that required Starknet artifacts exist
+    let required_files = vec![
+        util::get_proof_path(Flavour::Starknet),
+        util::get_vk_path(Flavour::Starknet),
+        util::get_public_inputs_path(Flavour::Starknet),
+    ];
+
+    if !cli.dry_run {
+        util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
+    }
+
+    // Generate calldata using garaga
+    let proof_path = util::get_proof_path(Flavour::Starknet);
+    let vk_path = util::get_vk_path(Flavour::Starknet);
+    let public_inputs_path = util::get_public_inputs_path(Flavour::Starknet);
+    let proof_str = proof_path.to_string_lossy();
+    let vk_str = vk_path.to_string_lossy();
+    let public_inputs_str = public_inputs_path.to_string_lossy();
+
+    let garaga_args = vec![
+        "calldata",
+        "--system",
+        "ultra_keccak_honk",
+        "--proof",
+        &proof_str,
+        "--vk",
+        &vk_str,
+        "--public",
+        &public_inputs_str,
+    ];
+
+    if cli.verbose {
+        info!("Running: garaga {}", garaga_args.join(" "));
+    }
+
+    if cli.dry_run {
+        println!("Would run: garaga {}", garaga_args.join(" "));
+        return Ok(());
+    }
+
+    let calldata_timer = Timer::start();
+    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format!(
+                "Calldata generated successfully ({})",
+                calldata_timer.elapsed()
+            ))
+        );
+        summary.add_operation("Calldata JSON generated for proof verification");
+        summary.print();
+    }
+
+    Ok(())
+}
+
+fn handle_cairo_declare(cli: &Cli) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Validate that Cairo verifier contract exists
+    let verifier_contract_path = std::path::PathBuf::from("./contracts/Verifier.cairo");
+    if !cli.dry_run {
+        util::validate_files_exist(&[verifier_contract_path.clone()])
+            .map_err(enhance_error_with_suggestions)?;
+    }
+
+    // Declare Cairo verifier contract using garaga
+    let contract_str = verifier_contract_path.to_string_lossy();
+    let garaga_args = vec!["declare", "--contract", &contract_str];
+
+    if cli.verbose {
+        info!("Running: garaga {}", garaga_args.join(" "));
+    }
+
+    if cli.dry_run {
+        println!("Would run: garaga {}", garaga_args.join(" "));
+        return Ok(());
+    }
+
+    let declare_timer = Timer::start();
+    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format!(
+                "Contract declared successfully ({})",
+                declare_timer.elapsed()
+            ))
+        );
+        summary.add_operation("Cairo verifier contract declared on Starknet");
+        summary.print();
+    }
+
+    Ok(())
+}
+
+fn handle_cairo_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Validate that class hash is provided
+    let hash = class_hash.ok_or_else(|| {
+        create_smart_error(
+            "Class hash is required for deployment",
+            &[
+                "Provide a class hash with --class-hash <HASH>",
+                "Get the class hash from the declare command output",
+                "Use 'bargo cairo declare' to declare the contract first",
+            ],
+        )
+    })?;
+
+    // Deploy Cairo verifier contract using garaga
+    let garaga_args = vec!["deploy", "--class-hash", hash];
+
+    if cli.verbose {
+        info!("Running: garaga {}", garaga_args.join(" "));
+        info!("Deploying contract with class hash: {}", hash);
+    }
+
+    if cli.dry_run {
+        println!("Would run: garaga {}", garaga_args.join(" "));
+        return Ok(());
+    }
+
+    let deploy_timer = Timer::start();
+    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format!(
+                "Contract deployed successfully ({})",
+                deploy_timer.elapsed()
+            ))
+        );
+        summary.add_operation(&format!(
+            "Cairo verifier deployed with class hash: {}",
+            hash
+        ));
+        summary.print();
+    }
+
+    Ok(())
+}
+
+fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Validate that required Starknet artifacts exist
+    let required_files = vec![
+        util::get_proof_path(Flavour::Starknet),
+        util::get_vk_path(Flavour::Starknet),
+        util::get_public_inputs_path(Flavour::Starknet),
+    ];
+
+    if !cli.dry_run {
+        util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
+    }
+
+    // Verify proof on-chain using garaga
+    let proof_path = util::get_proof_path(Flavour::Starknet);
+    let vk_path = util::get_vk_path(Flavour::Starknet);
+    let public_inputs_path = util::get_public_inputs_path(Flavour::Starknet);
+    let proof_str = proof_path.to_string_lossy();
+    let vk_str = vk_path.to_string_lossy();
+    let public_inputs_str = public_inputs_path.to_string_lossy();
+
+    let garaga_args = vec![
+        "verify-onchain",
+        "--address",
+        address,
+        "--vk",
+        &vk_str,
+        "--proof",
+        &proof_str,
+        "--public",
+        &public_inputs_str,
+    ];
+
+    if cli.verbose {
+        info!("Running: garaga {}", garaga_args.join(" "));
+        info!("Verifying proof on-chain at address: {}", address);
+    }
+
+    if cli.dry_run {
+        println!("Would run: garaga {}", garaga_args.join(" "));
+        return Ok(());
+    }
+
+    let verify_timer = Timer::start();
+    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format!(
+                "Proof verified on-chain successfully ({})",
+                verify_timer.elapsed()
+            ))
+        );
+        summary.add_operation(&format!(
+            "On-chain verification completed at address: {}",
+            address
+        ));
+        summary.print();
+    }
+
+    Ok(())
 }
 
 fn get_package_name(cli: &Cli) -> Result<String> {
