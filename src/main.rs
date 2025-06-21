@@ -87,6 +87,10 @@ enum Commands {
         #[command(subcommand)]
         command: CairoCommands,
     },
+
+    /// Check system dependencies
+    #[command(about = "Verify that all required tools are installed and available")]
+    Doctor,
 }
 
 #[derive(Subcommand)]
@@ -225,6 +229,12 @@ fn main() -> Result<()> {
                 handle_cairo_verify_onchain(&cli, &address)?;
             }
         },
+        Commands::Doctor => {
+            if !cli.quiet {
+                print_banner("doctor");
+            }
+            handle_doctor(&cli)?;
+        }
     }
 
     if cli.verbose {
@@ -965,8 +975,8 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
         "ultra_keccak_honk",
         "--vk",
         &vk_str,
-        "-o",
-        "contracts/Verifier.cairo",
+        "--project-name",
+        &pkg_name,
     ];
 
     if cli.verbose {
@@ -1026,7 +1036,7 @@ fn handle_cairo_data(cli: &Cli) -> Result<()> {
         &proof_str,
         "--vk",
         &vk_str,
-        "--public",
+        "--public-inputs",
         &public_inputs_str,
     ];
 
@@ -1177,7 +1187,7 @@ fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
         &vk_str,
         "--proof",
         &proof_str,
-        "--public",
+        "--public-inputs",
         &public_inputs_str,
     ];
 
@@ -1207,6 +1217,82 @@ fn handle_cairo_verify_onchain(cli: &Cli, address: &str) -> Result<()> {
             address
         ));
         summary.print();
+    }
+
+    Ok(())
+}
+
+fn handle_doctor(cli: &Cli) -> Result<()> {
+    if !cli.quiet {
+        println!("🔍 Checking system dependencies...\n");
+    }
+
+    let mut all_good = true;
+
+    // Check nargo
+    match which::which("nargo") {
+        Ok(path) => {
+            if !cli.quiet {
+                println!("✅ nargo: {}", path.display());
+            }
+        }
+        Err(_) => {
+            if !cli.quiet {
+                println!("❌ nargo: not found");
+                println!(
+                    "   Install from: https://noir-lang.org/docs/getting_started/installation/"
+                );
+            }
+            all_good = false;
+        }
+    }
+
+    // Check bb
+    match which::which("bb") {
+        Ok(path) => {
+            if !cli.quiet {
+                println!("✅ bb: {}", path.display());
+            }
+        }
+        Err(_) => {
+            if !cli.quiet {
+                println!("❌ bb: not found");
+                println!("   Install from: https://github.com/AztecProtocol/aztec-packages");
+            }
+            all_good = false;
+        }
+    }
+
+    // Check garaga (optional for Cairo features)
+    match which::which("garaga") {
+        Ok(path) => {
+            if !cli.quiet {
+                println!("✅ garaga: {}", path.display());
+            }
+        }
+        Err(_) => {
+            if !cli.quiet {
+                println!("⚠️  garaga: not found (optional - needed for Cairo features)");
+                println!("   Install with: pipx install garaga");
+                println!("   Requires Python 3.10+");
+            }
+        }
+    }
+
+    if !cli.quiet {
+        println!();
+        if all_good {
+            println!("🎉 All required dependencies are available!");
+            println!("   You can use all bargo features.");
+        } else {
+            println!("🚨 Some required dependencies are missing.");
+            println!("   EVM features require: nargo + bb");
+            println!("   Cairo features also require: garaga");
+        }
+    }
+
+    if !all_good {
+        std::process::exit(1);
     }
 
     Ok(())
