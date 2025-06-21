@@ -56,9 +56,17 @@ bargo rebuild       # ← clean + build in one step
 - [x] `bargo build` - nargo execute wrapper  
 - [x] `bargo prove` - bb prove + write_vk + verify chain
 - [x] `bargo verify` - bb verify wrapper
-- [x] `bargo solidity` - Solidity verifier generation
-- [x] `bargo clean` - target directory cleanup
-- [x] `bargo rebuild` - clean + build in one command
+- [x] `bargo verifier` - Solidity verifier generation
+- [x] `bargo clean` - target directory cleanup (with `--backend` support)
+- [x] `bargo rebuild` - clean + build in one command (with `--backend` support)
+- [x] `bargo doctor` - dependency verification tool
+
+### Cairo Commands (requires garaga)
+- [x] `bargo cairo gen` - generate Cairo verifier contract for Starknet
+- [x] `bargo cairo data` - generate calldata JSON for proof verification
+- [x] `bargo cairo declare` - declare verifier contract on Starknet
+- [x] `bargo cairo deploy` - deploy declared verifier contract
+- [x] `bargo cairo verify-onchain` - verify proof on-chain using deployed verifier
 
 ### CLI Infrastructure  
 - [x] Clap-based command parsing
@@ -76,6 +84,8 @@ bargo rebuild       # ← clean + build in one step
 - [x] Smart rebuilds - Track file timestamps, auto-clean and rebuild when needed
 - [x] Dependency-aware invalidation - Detect changes in `Nargo.toml` or source files
 - [x] `bargo build` automatically handles stale artifacts
+- [x] Multi-backend support - Separate `target/bb/` and `target/starknet/` directories
+- [x] Backend-aware cleaning - Clean specific backends with `--backend` flag
 
 ### User Experience
 - [x] Rich terminal output (emojis, colors, progress)
@@ -98,24 +108,65 @@ cargo build --release
 ./target/release/bargo --help
 ```
 
+### Cairo/Starknet Support (Optional)
+
+For Cairo verifier generation and Starknet deployment features, you'll also need garaga:
+
+```bash
+# Install garaga (requires Python 3.10+)
+pipx install garaga
+
+# Verify installation
+garaga --help
+```
+
+**Note**: All EVM/Solidity features work without garaga. Cairo features (`bargo cairo ...`) require garaga to be installed.
+
 ## Usage Examples
 
-### Basic Development Workflow
+### Check Dependencies
+
+```bash
+# Verify all tools are installed
+bargo doctor       # ✅ nargo: /usr/local/bin/nargo
+                   # ✅ bb: /usr/local/bin/bb  
+                   # ✅ garaga: /usr/local/bin/garaga
+                   # 🎉 All required dependencies are available!
+```
+
+### Basic Development Workflow (EVM/Solidity)
 
 ```bash
 # In a Noir project directory
 bargo check        # ✓ All packages OK
-bargo build        # ✓ Bytecode → target/wkshp.json, Witness → target/wkshp.gz  
-bargo prove        # ✓ Proof generated → target/proof (42 KB)
-                   # ✓ VK saved → target/vk
+bargo build        # ✓ Bytecode → target/bb/wkshp.json, Witness → target/bb/wkshp.gz  
+bargo prove        # ✓ Proof generated → target/bb/proof (13.8 KB)
+                   # ✓ VK saved → target/bb/vk
                    # ✅ Proof verified successfully
 ```
 
-### Solidity Deployment
+### EVM Verifier Generation
 
 ```bash
-bargo solidity     # ✓ VK (keccak) → target/vk
+bargo verifier     # ✓ VK (keccak) → target/bb/vk
                    # ✓ Verifier contract → contracts/Verifier.sol
+```
+
+### Cairo/Starknet Workflow (requires garaga)
+
+```bash
+# Generate Cairo verifier
+bargo cairo gen    # ✓ Keccak proof → target/starknet/proof (13.8 KB)
+                   # ✓ Keccak VK → target/starknet/vk (1.7 KB)  
+                   # ✓ Cairo verifier → contracts/Verifier.cairo (45.2 KB)
+
+# Generate calldata for verification
+bargo cairo data   # ✓ Calldata JSON output
+
+# Deploy to Starknet
+bargo cairo declare                    # ✓ Contract declared → class hash: 0x1234...
+bargo cairo deploy --class-hash 0x1234...  # ✓ Contract deployed → address: 0xabcd...
+bargo cairo verify-onchain -a 0xabcd...    # ✅ Proof verified on-chain
 ```
 
 ### Development Iteration
@@ -126,6 +177,19 @@ vim src/main.nr
 
 bargo build        # 🔄 Auto-detects changes, rebuilds automatically
 bargo prove        # ✓ New proof with updated circuit
+```
+
+### Cross-Backend Management
+
+```bash
+# Clean specific backends
+bargo clean --backend bb       # 🧹 Remove only EVM artifacts
+bargo clean --backend starknet # 🧹 Remove only Cairo artifacts  
+bargo clean                    # 🧹 Remove all artifacts (default)
+
+# Backend-aware rebuild
+bargo rebuild --backend bb     # 🔄 Clean + build EVM only
+bargo rebuild                  # 🔄 Clean + build everything
 ```
 
 ### Debugging Workflow
