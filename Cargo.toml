@@ -11,6 +11,7 @@ toml = "0.8.23"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 atty = "0.2.14"
+which = "4.4"
 
 [dev-dependencies]
 tempfile = "3.8"
