@@ -4,9 +4,18 @@ use color_eyre::Result;
 pub fn ensure_available() -> Result<()> {
     which::which("garaga").map_err(|_| {
         color_eyre::eyre::eyre!(
-            "garaga command not found. Please install garaga:\n\n  \
-             pipx install garaga\n\n\
-             Garaga requires Python 3.10 or higher."
+            "❌ garaga command not found\n\n\
+             Cairo/Starknet features require garaga to be installed.\n\n\
+             📋 Installation steps:\n\
+             1. Check Python version: python3 --version (need 3.10+)\n\
+             2. Install pipx: python3 -m pip install pipx\n\
+             3. Install garaga: pipx install garaga\n\
+             4. Verify: garaga --help\n\n\
+             🔧 Alternative installation:\n\
+             • With pip: pip install garaga\n\
+             • From source: https://github.com/keep-starknet-strange/garaga\n\n\
+             💡 You can still use all EVM features without garaga!\n\
+             Run 'bargo doctor' to check all dependencies."
         )
     })?;
     Ok(())
