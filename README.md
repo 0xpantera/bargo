@@ -1,6 +1,8 @@
 <div align="center">
-  <img src="https://i.imgur.com/bargo-logo.png" alt="bargo logo" width="400"/>
+  <img src="./assets/bargo-logo.png" alt="bargo logo" width="400"/>
 </div>
+
+<!-- Note: Add the bargo logo image to ./assets/bargo-logo.png for the image to render -->
 
 # bargo
 
