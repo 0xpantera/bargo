@@ -3,6 +3,7 @@ use std::process::Command;
 use tracing::{debug, error};
 
 pub mod bb;
+pub mod foundry;
 pub mod garaga;
 pub mod nargo;
 
