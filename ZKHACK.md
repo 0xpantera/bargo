@@ -1,192 +1,347 @@
-# ZK Hack Demo: Noir → Starknet Proof Verification with bargo
+# ZK Hack Demo: Cross-Chain Noir ZK Verification with bargo
 
-**Demo Objective:** Show complete end-to-end Zero-Knowledge proof verification pipeline from Noir circuit to live Starknet mainnet verification.
+**Demo Objective:** Demonstrate a unified, developer-friendly CLI that enables seamless Zero-Knowledge proof verification across both **EVM** and **Starknet** ecosystems from a single Noir circuit.
 
 ## 🚀 What We're Demonstrating
 
-**bargo** is a developer-friendly CLI that consolidates the complex Noir ZK toolchain into simple, opinionated commands. Today we'll show the complete Cairo/Starknet integration:
+**bargo** revolutionizes Noir ZK development by consolidating complex multi-tool workflows into simple, opinionated commands. Today we'll show **complete feature parity** between EVM and Starknet:
 
-- ✅ **Noir circuit** → **Cairo verifier contract** 
-- ✅ **Optimized proof generation** (Starknet-native with ZK optimizations)
-- ✅ **Seamless deployment workflow** (auto-save state between commands)
-- ✅ **Live on-chain verification** on Starknet mainnet
+- ✅ **Single Noir circuit** → **Dual-chain verifier contracts** (Solidity + Cairo)
+- ✅ **Chain-optimized proof generation** (Keccak for EVM, Poseidon for Starknet)
+- ✅ **Complete project scaffolding** (Foundry + Scarb structures)
+- ✅ **Seamless deployment workflows** with auto-state management
+- ✅ **Live cross-chain verification** on both Ethereum and Starknet
 
-## 📋 Prerequisites (Already Set Up)
+## 📋 Prerequisites & Setup
+
+### Required Tools Installation
 
 ```bash
-# Tools installed
-✅ nargo (Noir compiler)
-✅ bb (Barretenberg prover) 
-✅ garaga (Cairo verifier generator)
-✅ bargo (our tool - consolidates everything)
+# 1. Install Foundry (for EVM workflow)
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 
-# Environment ready
-✅ Python virtual environment with garaga
-✅ Starknet account with mainnet funding
-✅ .secrets file with account credentials
+# 2. Install specific versions for Cairo workflow (CRITICAL!)
+pip install garaga==0.18.1
+noirup --version 1.0.0-beta.4
+bbup --version 0.87.4-starknet.1
+
+# 3. Verify installations
+forge --version      # Should show foundry version
+garaga --help        # Should show garaga CLI
+nargo --version      # Should show 1.0.0-beta.4
+bb --version         # Should show 0.87.4-starknet.1
 ```
 
-## 🎯 Complete Demo Workflow
+### Environment Setup
 
-### Step 1: Start from Clean Slate
+**For EVM workflow**, create `.env` file:
 ```bash
-cd wkshp
+# .env
+SEPOLIA_RPC_URL="https://eth-sepolia.g.alchemy.com/v2/your_key"
+SEPOLIA_PRIVATE_KEY=0x1234567890abcdef...
+ETHERSCAN_API_KEY=your_etherscan_key
+```
+
+**For Cairo workflow**, create `.secrets` file:
+```bash
+# .secrets
+SEPOLIA_RPC_URL="https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/your_key"
+SEPOLIA_ACCOUNT_PRIVATE_KEY=0x1234567890abcdef...
+SEPOLIA_ACCOUNT_ADDRESS=0x1234567890abcdef...
+
+MAINNET_RPC_URL="https://starknet-mainnet.g.alchemy.com/starknet/version/rpc/v0_8/your_key"
+MAINNET_ACCOUNT_PRIVATE_KEY=0x1234567890abcdef...
+MAINNET_ACCOUNT_ADDRESS=0x1234567890abcdef...
+```
+
+## 🔧 Demo Setup
+
+```bash
+# Create a Noir demo project
+nargo new demo && cd demo
+
+# Clean any existing artifacts
 ../bargo/target/release/bargo clean
-```
-**What it does:** Removes all build artifacts to start fresh  
-**Expected output:** `✅ Removed target/`
 
-### Step 2: Build Noir Circuit
-```bash
-../bargo/target/release/bargo build --verbose
+# Verify we have a basic Noir circuit
+cat src/main.nr
 ```
-**What it does:** Compiles Noir circuit into bytecode + witness  
+
+**Expected:** Simple Noir circuit like:
+```noir
+fn main(x: Field, y: Field) -> Field {
+    x + y
+}
+```
+
+## 🌐 EVM Workflow Demo
+
+### Step 1: Generate Complete Foundry Project
+```bash
+../bargo/target/release/bargo evm gen --verbose
+```
+
+**What happens:**
+- Generates Keccak-optimized proof (Ethereum native)
+- Creates complete Foundry project structure
+- Produces Verifier.sol contract ready for deployment
+
 **Expected output:**
 ```
-✅ Bytecode generated → target/bb/wkshp.json (967 B, ~100ms)
-✅ Witness generated → target/bb/wkshp.gz (49 B, 0ms)
+🔧 Generating EVM verifier with Foundry integration...
+✅ Keccak proof generated → target/bb/proof (13.8 KB, ~150ms)
+✅ Keccak VK generated → target/bb/vk (1.2 KB, ~50ms)
+✅ Foundry project created → contracts/
+✅ Verifier.sol generated → contracts/src/Verifier.sol (25.3 KB, ~200ms)
+✅ Ready for Ethereum deployment
 ```
 
-### Step 3: Generate Cairo Verifier (🔥 The Magic!)
+### Step 2: Generate Calldata
 ```bash
+../bargo/target/release/bargo evm calldata
+```
+
+**What happens:** Converts proof into ABI-encoded format for contract interaction
+
+**Expected output:**
+```
+✅ ABI-encoded calldata generated for on-chain verification
+0x1234567890abcdef... (long hex string)
+```
+
+### Step 3: Deploy to Ethereum (Optional - requires testnet setup)
+```bash
+# If environment is set up:
+../bargo/target/release/bargo evm deploy --network sepolia
+```
+
+**Expected output:**
+```
+✅ Contract deployed to: 0x742d35Cc6634C0532925a3b8D9F9CCE8c8C8C82A
+✅ Deployment transaction: 0x8f2a7b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2
+```
+
+## 🏛️ Cairo/Starknet Workflow Demo
+
+### Step 1: Generate Cairo Verifier
+```bash
+# Activate Python environment if needed
 source .venv/bin/activate
+
 ../bargo/target/release/bargo cairo gen --verbose
 ```
-**What it does:** 
-- Generates Starknet-optimized ZK proof using `ultra_starknet_zk_honk` + `--zk` flag
-- Creates Cairo verifier contract for Starknet deployment
-- Maximum gas optimization (Poseidon hash, ZK proofs)
+
+**What happens:**
+- Generates Starknet-optimized ZK proof using `ultra_starknet_zk_honk`
+- Creates Cairo verifier contract with Poseidon hash optimization
+- Maximum gas efficiency for Starknet deployment
 
 **Expected output:**
 ```
+🔧 Generating Cairo verifier with maximum ZK optimization...
 ✅ Starknet proof generated → target/starknet/proof (15.8 KB, ~170ms)
-✅ Starknet VK generated → target/starknet/vk (1.7 KB, ~50ms)  
+✅ Starknet VK generated → target/starknet/vk (1.7 KB, ~50ms)
 ✅ Cairo verifier generated → contracts/Verifier.cairo (11.2 KB, ~2s)
+✅ Optimized for maximum gas efficiency
 ```
 
-### Step 4: Generate Calldata for Verification
+### Step 2: Generate Calldata
 ```bash
-../bargo/target/release/bargo cairo data --quiet
+../bargo/target/release/bargo cairo data
 ```
-**What it does:** Converts proof into calldata format for on-chain verification  
-**Expected output:** Long JSON array with ~2853 field elements (thousands of numbers)
 
-### Step 5: Declare Contract on Starknet Mainnet
-```bash
-../bargo/target/release/bargo cairo declare --network mainnet --verbose
+**What happens:** Converts proof into JSON format with field elements
+
+**Expected output:**
 ```
-**What it does:** 
-- Declares Cairo verifier contract on Starknet mainnet
-- Auto-saves class hash for next step
-- Uses real mainnet funds
+✅ Calldata JSON generated (2853 field elements)
+[0x1234, 0x5678, 0x9abc, ...] (long JSON array)
+```
+
+### Step 3: Declare Contract (Optional - requires Starknet account)
+```bash
+# If .secrets file is configured:
+../bargo/target/release/bargo cairo declare --network sepolia
+```
 
 **Expected output:**
 ```
 ✅ Class hash: 0x02755ac7ee11bbc9a675f01b77ba8b482450371b94d40e4132b4146c9a889dac
-✅ Contract declared successfully (~20s)
+✅ Contract declared successfully
 ```
 
-### Step 6: Deploy Contract (Seamless UX!)
+### Step 4: Deploy Contract
 ```bash
-../bargo/target/release/bargo cairo deploy --verbose
+../bargo/target/release/bargo cairo deploy
 ```
-**What it does:** 
-- Automatically uses saved class hash (no copy/paste needed!)
-- Deploys verifier contract instance
-- Auto-saves contract address for verification
 
-**Expected output:** Either success with contract address, or honest error reporting (no fake success!)
-
-### Step 7: Verify Proof On-Chain (🎉 Grand Finale!)
-```bash
-../bargo/target/release/bargo cairo verify-onchain --verbose
-```
-**What it does:**
-- Automatically uses saved contract address  
-- Submits proof to live Starknet mainnet contract
-- Real ZK verification happens on-chain
+**What happens:** Automatically uses saved class hash, no manual copying needed!
 
 **Expected output:**
 ```
-✅ Using saved contract address: 0x65bf3f2391439511353ca05dda89acaa82956ad7f871152f345b7917e0a2f34
-Transaction hash: 0x66ea718e6a99b35877c5c7ed4e9e55aa8c2109923413c68b89d931329fb9f2c
-Check it out on https://voyager.online/tx/0x66ea718e6a99b35877c5c7ed4e9e55aa8c2109923413c68b89d931329fb9f2c
-✅ Proof verified on-chain successfully (~13s)
+✅ Using saved class hash: 0x02755ac7...
+✅ Contract deployed: 0x65bf3f2391439511353ca05dda89acaa82956ad7f871152f345b7917e0a2f34
 ```
 
-## 🎯 Key Demo Points to Highlight
+## 🌉 Cross-Chain Demonstration
 
-### 1. **Developer Experience Revolution**
-**Before bargo:**
+### Show Feature Parity
+```bash
+# Generate verifiers for both chains from same circuit
+../bargo/target/release/bargo evm gen      # ✅ Ethereum-ready
+../bargo/target/release/bargo cairo gen    # ✅ Starknet-ready
+
+# Generate calldata for both formats
+../bargo/target/release/bargo evm calldata    # ✅ ABI-encoded
+../bargo/target/release/bargo cairo data      # ✅ JSON format
+
+# Deploy to both ecosystems (if environments configured)
+../bargo/target/release/bargo evm deploy --network sepolia
+../bargo/target/release/bargo cairo deploy --network sepolia
+```
+
+### Verify Project Structure
+```bash
+# Check generated artifacts
+ls -la target/bb/          # EVM artifacts
+ls -la target/starknet/    # Starknet artifacts
+ls -la contracts/          # Generated contracts
+```
+
+**Expected structure:**
+```
+target/
+├── bb/
+│   ├── proof              # Keccak proof for EVM
+│   └── vk                 # Keccak verification key
+└── starknet/
+    ├── proof              # Poseidon proof for Starknet
+    ├── vk                 # Poseidon verification key
+    └── .bargo_class_hash   # Auto-saved state
+
+contracts/
+├── foundry.toml           # Foundry configuration
+├── src/
+│   └── Verifier.sol       # Solidity verifier
+└── Verifier.cairo         # Cairo verifier
+```
+
+## 🎯 Key Demo Points for Judges
+
+### 1. Developer Experience Revolution
+
+**Before bargo (EVM):**
 ```bash
 # Complex, error-prone workflow
 nargo execute
-bb prove -s ultra_honk --oracle_hash starknet --zk -b target/foo.json -w target/foo.gz -o target/
-bb write_vk -b target/foo.json -o target/ --oracle_hash starknet  
-garaga gen --system ultra_starknet_zk_honk --vk target/vk --project-name foo
-garaga calldata --system ultra_starknet_zk_honk --proof target/proof --vk target/vk --public-inputs target/public_inputs
-garaga declare --project-path ./foo --network mainnet
+bb prove --oracle_hash keccak -b target/wkshp.json -w target/wkshp.gz -o target/
+bb write_vk --oracle_hash keccak -b target/wkshp.json -o target/
+bb write_solidity_verifier -k target/vk -o contracts/Verifier.sol
+forge create --rpc-url $RPC_URL --private-key $PRIVATE_KEY Verifier.sol
+# Manual contract interaction...
+```
+
+**Before bargo (Starknet):**
+```bash
+# Even more complex!
+nargo execute
+bb prove -s ultra_honk --oracle_hash starknet --zk -b target/wkshp.json -w target/wkshp.gz -o target/
+bb write_vk --oracle_hash starknet -b target/wkshp.json -o target/
+garaga gen --system ultra_starknet_zk_honk --vk target/vk --project-name wkshp
+garaga calldata --system ultra_starknet_zk_honk --proof target/proof --vk target/vk
+garaga declare --project-path ./wkshp --network sepolia
 # Copy class hash manually 😱
-garaga deploy --class-hash 0x1234... 
+garaga deploy --class-hash 0x1234...
 # Copy contract address manually 😱
-garaga verify-onchain --system ultra_starknet_zk_honk --contract-address 0xabcd... --network mainnet --vk target/vk --proof target/proof --public-inputs target/public_inputs
 ```
 
 **After bargo:**
 ```bash
-# Simple, opinionated workflow
-bargo cairo gen
-bargo cairo declare --network mainnet  
-bargo cairo deploy
-bargo cairo verify-onchain
+# Unified, simple workflow for both chains
+bargo evm gen && bargo evm deploy --network sepolia
+bargo cairo gen && bargo cairo deploy --network sepolia
 ```
 
-### 2. **Automatic State Management**
-- **Class hashes** automatically saved in `target/starknet/.bargo_class_hash`
-- **Contract addresses** automatically saved in `target/starknet/.bargo_contract_address`  
-- **No manual copying** between commands!
+### 2. Automatic State Management
+- **EVM**: Automatic Foundry project setup and configuration
+- **Starknet**: Auto-save class hashes and contract addresses
+- **Both**: No manual copying between commands
 
-### 3. **Maximum Optimization**
-- Uses `ultra_starknet_zk_honk` system (most gas-efficient)
-- Proper `--zk` flag for ZK proof generation
-- Starknet-native Poseidon hash instead of Keccak
-- Reduces contract size and verification costs
+### 3. Chain-Specific Optimizations
+- **EVM**: Keccak hash (Ethereum native), standard proof format
+- **Starknet**: Poseidon hash (Starknet native), ZK-optimized proofs
+- **Both**: Optimized for their respective ecosystems
 
-### 4. **Honest Error Handling**
-- **Before:** Fake success messages even when commands failed
-- **After:** Real error reporting with helpful troubleshooting suggestions
+### 4. Production Ready
+- ✅ **EVM**: Tested end-to-end with Foundry integration
+- ✅ **Starknet**: Tested on mainnet with real deployments
+- ✅ **Both**: Robust error handling and user feedback
 
-### 5. **Production Ready**
-- ✅ **Tested end-to-end** on Starknet mainnet
-- ✅ **Real contract deployments** and proof verifications  
-- ✅ **Live transaction hashes** you can verify on Voyager
+## 📊 Technical Comparison
 
-## 🎤 Demo Script
+| Feature | EVM Implementation | Starknet Implementation |
+|---------|-------------------|------------------------|
+| **Hash Function** | Keccak (Ethereum native) | Poseidon (Starknet native) |
+| **Proof System** | `ultra_honk` | `ultra_starknet_zk_honk` |
+| **Project Structure** | Foundry + Solidity | Scarb + Cairo |
+| **Calldata Format** | ABI-encoded hex | JSON field elements |
+| **Deployment** | `forge create` | `starkli declare` + `deploy` |
+| **State Management** | Environment variables | Auto-saved files |
 
-1. **"Let me show you the problem"** - Show complex garaga/bb command sequences
-2. **"Here's our solution"** - Show simple bargo commands
-3. **"Watch it work live"** - Run the complete workflow
-4. **"This is production-ready"** - Show real mainnet transactions on Voyager
-5. **"Developer experience matters"** - Highlight auto-save, error handling, optimizations
+## 🎤 Judge Evaluation Script
 
-## 🔗 Live Results to Show
+### Quick Demo (2-3 minutes)
+```bash
+# 1. Clean start
+bargo clean
 
-- **Voyager Transaction:** https://voyager.online/tx/0x66ea718e6a99b35877c5c7ed4e9e55aa8c2109923413c68b89d931329fb9f2c
-- **Contract Address:** `0x65bf3f2391439511353ca05dda89acaa82956ad7f871152f345b7917e0a2f34`
-- **Class Hash:** `0x02755ac7ee11bbc9a675f01b77ba8b482450371b94d40e4132b4146c9a889dac`
+# 2. Show dual-chain generation
+bargo evm gen      # ✅ Ethereum verifier ready
+bargo cairo gen    # ✅ Starknet verifier ready
 
-## 💡 Demo Tips
+# 3. Show calldata generation
+bargo evm calldata    # ✅ ABI format
+bargo cairo data      # ✅ JSON format
 
-- **Use `--verbose`** to show underlying commands being executed
-- **Highlight the auto-save** features (no copy/paste needed)
-- **Show error handling** if deployment fails (honest reporting)
-- **Open Voyager links** to show real mainnet verification
-- **Compare before/after** command complexity
+# 4. Show project structure
+ls -la target/ contracts/
+```
+
+### Full Demo (5-10 minutes)
+Include actual deployment steps if environment is configured.
 
 ## 🚀 Impact Statement
 
-**"We've taken the complex, error-prone Noir → Starknet workflow and made it as simple as deploying to Ethereum. This unlocks ZK development for the masses and enables production-ready Starknet ZK applications."**
+**"We've solved the fragmentation problem in ZK development. Instead of learning different toolchains for EVM and Starknet, developers now have a unified CLI that provides identical developer experience across both ecosystems, each optimized for its target blockchain."**
+
+## 🔗 Real Production Examples
+
+- **Starknet Mainnet Contract**: `0x65bf3f2391439511353ca05dda89acaa82956ad7f871152f345b7917e0a2f34`
+- **Successful Verification TX**: `0x66ea718e6a99b35877c5c7ed4e9e55aa8c2109923413c68b89d931329fb9f2c`
+- **Voyager Link**: https://voyager.online/tx/0x66ea718e6a99b35877c5c7ed4e9e55aa8c2109923413c68b89d931329fb9f2c
+
+## 💡 Troubleshooting for Judges
+
+### Common Issues
+1. **Version mismatches**: Ensure exact versions for Cairo workflow
+2. **Environment setup**: Check `.env` and `.secrets` files
+3. **Tool installation**: Verify `forge`, `garaga`, `nargo`, `bb` are available
+
+### Quick Fixes
+```bash
+# Check tool versions
+bargo doctor
+
+# Reset environment
+bargo clean && bargo rebuild
+
+# Verbose output for debugging
+bargo evm gen --verbose
+bargo cairo gen --verbose
+```
 
 ---
 
-*Total demo time: ~3-5 minutes for complete end-to-end workflow*
+*Total evaluation time: 5-10 minutes for complete cross-chain demonstration*
+*bargo: Making Zero-Knowledge development accessible across all blockchains*

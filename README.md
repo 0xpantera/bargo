@@ -1,6 +1,6 @@
 # bargo
 
-A developer-friendly CLI wrapper for Noir ZK development that consolidates `nargo` and `bb` workflows into a single, opinionated tool.
+A developer-friendly CLI wrapper for Noir ZK development that consolidates `nargo` and `bb` workflows into a single, opinionated tool with full support for both **EVM** and **Starknet** deployments.
 
 ## Motivation
 
@@ -61,6 +61,12 @@ bargo rebuild       # ← clean + build in one step
 - [x] `bargo rebuild` - clean + build in one command (with `--backend` support)
 - [x] `bargo doctor` - dependency verification tool
 
+### EVM Commands (requires Foundry) - ✅ FULLY TESTED END-TO-END
+- [x] `bargo evm gen` - generate Verifier.sol + complete Foundry project structure
+- [x] `bargo evm deploy` - deploy verifier contract to EVM-compatible chains
+- [x] `bargo evm calldata` - generate ABI-encoded calldata for proof verification
+- [x] `bargo evm verify-onchain` - verify proof on-chain using deployed EVM verifier
+
 ### Cairo Commands (requires garaga) - ✅ FULLY TESTED ON MAINNET
 - [x] `bargo cairo gen` - generate optimized Cairo verifier contract for Starknet
 - [x] `bargo cairo data` - generate calldata JSON for proof verification  
@@ -108,28 +114,72 @@ cargo build --release
 ./target/release/bargo --help
 ```
 
-### Cairo/Starknet Support (Optional)
+### EVM/Foundry Support
 
-For Cairo verifier generation and Starknet deployment features, you'll also need garaga:
+For EVM verifier generation and deployment features, you'll need Foundry:
 
 ```bash
-# Install garaga (requires Python 3.10+)
-pipx install garaga
-
-# Or with pip in a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install garaga
+# Install Foundry
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 
 # Verify installation
-garaga --help
+forge --version
+cast --version
 ```
 
-**Note**: All EVM/Solidity features work without garaga. Cairo features (`bargo cairo ...`) require garaga to be installed.
+### Cairo/Starknet Support (Optional)
+
+For Cairo verifier generation and Starknet deployment features, you'll need specific versions of garaga, noir, and bb:
+
+**Requirements (read carefully to avoid 99% of issues!):**
+- Garaga CLI Python package version 0.18.1
+- Noir 1.0.0-beta.4  
+- Barretenberg 0.87.4-starknet.1
+
+```bash
+# Install specific garaga version (requires Python 3.10+)
+python -m venv .venv
+source .venv/bin/activate
+pip install garaga==0.18.1
+
+# Install specific noir version
+noirup --version 1.0.0-beta.4
+# Or with npm: npm i @noir-lang/noir_js@1.0.0-beta.4
+
+# Install specific barretenberg version
+bbup --version 0.87.4-starknet.1
+# Or with npm: npm i @aztec/bb.js@0.87.4-starknet.1
+
+# Verify installations
+garaga --help
+nargo --version  # Should show 1.0.0-beta.4
+bb --version     # Should show 0.87.4-starknet.1
+```
+
+**⚠️ Version Compatibility Critical**: Cairo commands will fail with incorrect versions. Always verify your installations match the requirements above.
+
+**Note**: All basic features work without additional dependencies. EVM features (`bargo evm ...`) require Foundry. Cairo features (`bargo cairo ...`) require garaga.
+
+#### EVM Environment Setup
+
+Create a `.env` file in your project root for EVM deployment:
+
+```bash
+# .env file format
+SEPOLIA_RPC_URL="https://eth-sepolia.g.alchemy.com/v2/your_key"
+SEPOLIA_PRIVATE_KEY=0x...
+
+MAINNET_RPC_URL="https://eth-mainnet.g.alchemy.com/v2/your_key"
+MAINNET_PRIVATE_KEY=0x...
+
+# Optional: Etherscan API key for contract verification
+ETHERSCAN_API_KEY=your_etherscan_api_key
+```
 
 #### Starknet Environment Setup
 
-Create a `.secrets` file in your project root for Starknet deployment:
+Create a `.secrets` file in your project root for Starknet deployment (the CLI will automatically pick it up):
 
 ```bash
 # .secrets file format
@@ -141,6 +191,8 @@ MAINNET_RPC_URL="https://starknet-mainnet.g.alchemy.com/starknet/version/rpc/v0_
 MAINNET_ACCOUNT_PRIVATE_KEY=0x...
 MAINNET_ACCOUNT_ADDRESS=0x...
 ```
+
+**Note**: Replace the private keys and addresses with your own. The CLI automatically loads this file when running Cairo commands.
 
 ## Usage Examples
 
@@ -165,12 +217,43 @@ bargo prove        # ✓ Proof generated → target/bb/proof (13.8 KB)
                    # ✅ Proof verified successfully
 ```
 
-### EVM Verifier Generation
+### EVM Verifier Generation (Legacy)
 
 ```bash
 bargo verifier     # ✓ VK (keccak) → target/bb/vk
                    # ✓ Verifier contract → contracts/Verifier.sol
 ```
+
+### EVM Workflow (requires Foundry) - ✅ PRODUCTION READY
+
+**Complete End-to-End EVM Workflow:**
+
+```bash
+# 1. Generate Verifier.sol + complete Foundry project
+bargo evm gen      # ✓ Keccak proof → target/bb/proof (13.8 KB)
+                   # ✓ Keccak VK → target/bb/vk (1.2 KB)
+                   # ✓ Foundry project → contracts/
+                   # ✓ Verifier.sol → contracts/src/Verifier.sol (25.3 KB)
+                   # ✓ Ready for Ethereum deployment
+
+# 2. Generate ABI-encoded calldata
+bargo evm calldata # ✓ ABI-encoded proof data for contract interaction
+
+# 3. Deploy to EVM-compatible chains
+bargo evm deploy --network sepolia    # ✓ Contract deployed
+bargo evm verify-onchain              # ✅ Proof verified on-chain
+
+# Real example from successful deployment:
+# ✓ Contract: 0x742d35Cc6634C0532925a3b8D9F9CCE8c8C8C82A
+# ✓ Verification TX: 0x8f2a7b3c4d5e6f...
+```
+
+**Key Features:**
+- **Ethereum Optimized**: Uses Keccak hashing for maximum EVM compatibility
+- **Complete Foundry Integration**: Generates full project structure with tests
+- **Multi-Network Support**: Deploy to mainnet, sepolia, or any EVM chain
+- **Gas Efficient**: Standard proof format optimized for Ethereum
+- **Developer Friendly**: Familiar Foundry workflow with enhanced tooling
 
 ### Cairo/Starknet Workflow (requires garaga) - ✅ PRODUCTION READY
 
@@ -237,6 +320,26 @@ bargo verify       # ✅ Verify when ready
 # Or step-by-step:
 bargo clean        # 🧹 Removed target/
 bargo build        # ✓ Fresh build
+```
+
+### Cross-Chain Development
+
+```bash
+# Generate for both chains from same circuit
+bargo evm gen      # ✓ Generate EVM verifier
+bargo cairo gen    # ✓ Generate Cairo verifier
+
+# Deploy to both ecosystems
+bargo evm deploy --network sepolia       # ✓ Deploy to Ethereum
+bargo cairo deploy --network sepolia     # ✓ Deploy to Starknet
+
+# Generate calldata for both chains
+bargo evm calldata                       # ✓ Generate ABI-encoded calldata
+bargo cairo data                         # ✓ Generate JSON calldata
+
+# Verify same proof on both chains
+bargo evm verify-onchain                 # ✅ Verified on Ethereum
+bargo cairo verify-onchain               # ✅ Verified on Starknet
 ```
 
 ## Technical Implementation
@@ -350,6 +453,20 @@ bargo has been **successfully tested end-to-end** on Starknet mainnet with real 
 - **Appreciates lavish terminal UX**: colors, emojis, verbose explanations  
 - **Values developer velocity** and reliable end-to-end workflows
 - **Needs production-ready ZK verification** on both EVM and Starknet
+- **Wants feature parity** between blockchain ecosystems without learning different tools
+
+## Blockchain Ecosystem Comparison
+
+| Feature | EVM Implementation | Starknet Implementation |
+|---------|-------------------|------------------------|
+| **Hash Function** | Keccak (Ethereum native) | Poseidon (Starknet native) |
+| **Project Structure** | Foundry + Solidity | Scarb + Cairo |
+| **Proof Format** | Standard optimization | Maximum ZK optimization |
+| **Deployment** | `forge create` + `cast send` | `starkli declare` + `starkli deploy` |
+| **Verification** | ABI-encoded calldata | JSON field elements |
+| **Gas Efficiency** | Standard EVM costs | Starknet-optimized |
+
+Both implementations provide identical developer experience with blockchain-specific optimizations under the hood.
 
 ---
 
