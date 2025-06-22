@@ -88,6 +88,13 @@ enum Commands {
         command: CairoCommands,
     },
 
+    /// EVM/Foundry operations
+    #[command(about = "Generate Solidity verifiers and interact with EVM networks")]
+    Evm {
+        #[command(subcommand)]
+        command: EvmCommands,
+    },
+
     /// Check system dependencies
     #[command(about = "Verify that all required tools are installed and available")]
     Doctor,
@@ -128,6 +135,29 @@ enum CairoCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum EvmCommands {
+    /// Generate Solidity verifier contract and Foundry project
+    #[command(about = "Generate Solidity verifier contract with complete Foundry project setup")]
+    Gen,
+
+    /// Deploy verifier contract to EVM network
+    #[command(about = "Deploy verifier contract using Foundry")]
+    Deploy {
+        /// Network to deploy to (mainnet or sepolia)
+        #[arg(long, default_value = "sepolia")]
+        network: String,
+    },
+
+    /// Generate calldata for proof verification
+    #[command(about = "Generate calldata for proof verification using cast")]
+    Calldata,
+
+    /// Verify proof on-chain
+    #[command(about = "Verify proof on EVM network using deployed verifier")]
+    VerifyOnchain,
+}
+
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum Backend {
     /// Barretenberg backend (EVM/Solidity)
@@ -141,6 +171,9 @@ enum Backend {
 fn main() -> Result<()> {
     // Install color-eyre for pretty error reporting
     color_eyre::install()?;
+
+    // Load .env file if present (for EVM environment variables)
+    dotenv::dotenv().ok(); // .ok() means don't fail if .env doesn't exist
 
     let cli = Cli::parse();
 
@@ -193,13 +226,13 @@ fn main() -> Result<()> {
             if !cli.quiet {
                 print_banner("clean");
             }
-            handle_clean(&cli, backend.unwrap_or(Backend::All))?;
+            handle_clean(&cli, (*backend).unwrap_or(Backend::All))?;
         }
         Commands::Rebuild { ref backend } => {
             if !cli.quiet {
                 print_banner("rebuild");
             }
-            handle_rebuild(&cli, backend.unwrap_or(Backend::All))?;
+            handle_rebuild(&cli, (*backend).unwrap_or(Backend::All))?;
         }
         Commands::Cairo { ref command } => match command {
             CairoCommands::Gen => {
@@ -231,6 +264,32 @@ fn main() -> Result<()> {
                     print_banner("cairo verify-onchain");
                 }
                 handle_cairo_verify_onchain(&cli, address.as_deref())?;
+            }
+        },
+        Commands::Evm { ref command } => match command {
+            EvmCommands::Gen => {
+                if !cli.quiet {
+                    print_banner("evm gen");
+                }
+                handle_evm_gen(&cli)?;
+            }
+            EvmCommands::Deploy { network } => {
+                if !cli.quiet {
+                    print_banner("evm deploy");
+                }
+                handle_evm_deploy(&cli, network)?;
+            }
+            EvmCommands::Calldata => {
+                if !cli.quiet {
+                    print_banner("evm calldata");
+                }
+                handle_evm_calldata(&cli)?;
+            }
+            EvmCommands::VerifyOnchain => {
+                if !cli.quiet {
+                    print_banner("evm verify-onchain");
+                }
+                handle_evm_verify_onchain(&cli)?;
             }
         },
         Commands::Doctor => {
@@ -1495,6 +1554,38 @@ fn handle_doctor(cli: &Cli) -> Result<()> {
         }
     }
 
+    // Check forge (optional for EVM features)
+    match which::which("forge") {
+        Ok(path) => {
+            if !cli.quiet {
+                println!("✅ forge: {}", path.display());
+            }
+        }
+        Err(_) => {
+            if !cli.quiet {
+                println!("⚠️  forge: not found (optional - needed for EVM features)");
+                println!("   Install with: curl -L https://foundry.paradigm.xyz | bash");
+                println!("   Then run: foundryup");
+            }
+        }
+    }
+
+    // Check cast (optional for EVM features)
+    match which::which("cast") {
+        Ok(path) => {
+            if !cli.quiet {
+                println!("✅ cast: {}", path.display());
+            }
+        }
+        Err(_) => {
+            if !cli.quiet {
+                println!("⚠️  cast: not found (optional - needed for EVM features)");
+                println!("   Install with: curl -L https://foundry.paradigm.xyz | bash");
+                println!("   Then run: foundryup");
+            }
+        }
+    }
+
     if !cli.quiet {
         println!();
         if all_good {
@@ -1502,7 +1593,8 @@ fn handle_doctor(cli: &Cli) -> Result<()> {
             println!("   You can use all bargo features.");
         } else {
             println!("🚨 Some required dependencies are missing.");
-            println!("   EVM features require: nargo + bb");
+            println!("   Core features require: nargo + bb");
+            println!("   EVM deployment features also require: forge + cast");
             println!("   Cairo features also require: garaga");
         }
     }
@@ -1516,4 +1608,748 @@ fn handle_doctor(cli: &Cli) -> Result<()> {
 
 fn get_package_name(cli: &Cli) -> Result<String> {
     util::get_package_name(cli.pkg.as_ref()).map_err(enhance_error_with_suggestions)
+}
+
+/// Handle `evm gen` command - Generate Solidity verifier contract and Foundry project
+fn handle_evm_gen(cli: &Cli) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Ensure Foundry is available
+    backends::foundry::ensure_available().map_err(enhance_error_with_suggestions)?;
+
+    // Get package name for file paths
+    let pkg_name = get_package_name(cli)?;
+
+    // Step 1: Generate keccak-optimized proof and VK (similar to current verifier)
+    let proof_path = util::get_proof_path(Flavour::Bb);
+    let witness_path = util::get_witness_path(&pkg_name, Flavour::Bb);
+    let bytecode_path = util::get_bytecode_path(&pkg_name, Flavour::Bb);
+
+    // Check if we need to generate proof/VK
+    if !proof_path.exists() || !util::get_vk_path(Flavour::Bb).exists() {
+        if !cli.quiet {
+            println!("🔄 Generating keccak-optimized proof and verification key...");
+        }
+
+        // Ensure bytecode and witness exist
+        if !bytecode_path.exists() || !witness_path.exists() {
+            return Err(create_smart_error(
+                "Missing bytecode or witness files",
+                &[
+                    "Run 'bargo build' first to generate bytecode and witness",
+                    "Ensure your Noir circuit compiles successfully",
+                ],
+            ));
+        }
+
+        // Generate proof with keccak oracle
+        let bytecode_str = bytecode_path.to_string_lossy();
+        let witness_str = witness_path.to_string_lossy();
+        let prove_args = vec![
+            "prove",
+            "-b",
+            &bytecode_str,
+            "-w",
+            &witness_str,
+            "-o",
+            "./target/bb",
+            "--oracle_hash",
+            "keccak",
+            "--output_format",
+            "fields",
+        ];
+
+        if cli.verbose {
+            info!("Running: bb {}", prove_args.join(" "));
+        }
+
+        if !cli.dry_run {
+            std::fs::create_dir_all("./target/bb").map_err(|e| {
+                create_smart_error(
+                    &format!("Failed to create target/bb directory: {}", e),
+                    &[
+                        "Check directory permissions",
+                        "Ensure you have write access",
+                    ],
+                )
+            })?;
+
+            let prove_timer = Timer::start();
+            backends::bb::run(&prove_args).map_err(enhance_error_with_suggestions)?;
+
+            if !cli.quiet {
+                println!(
+                    "{}",
+                    success(&format_operation_result(
+                        "Keccak proof",
+                        &proof_path,
+                        &prove_timer
+                    ))
+                );
+            }
+        }
+
+        // Generate VK with keccak oracle
+        let vk_args = vec![
+            "write_vk",
+            "-b",
+            &bytecode_str,
+            "-o",
+            "./target/bb",
+            "--oracle_hash",
+            "keccak",
+        ];
+
+        if cli.verbose {
+            info!("Running: bb {}", vk_args.join(" "));
+        }
+
+        if !cli.dry_run {
+            let vk_timer = Timer::start();
+            backends::bb::run(&vk_args).map_err(enhance_error_with_suggestions)?;
+
+            if !cli.quiet {
+                let vk_path = util::get_vk_path(Flavour::Bb);
+                println!(
+                    "{}",
+                    success(&format_operation_result("Keccak VK", &vk_path, &vk_timer))
+                );
+                summary.add_operation(&format!(
+                    "Verification key with keccak optimization ({})",
+                    util::format_file_size(&vk_path)
+                ));
+            }
+        }
+    }
+
+    // Step 2: Create Foundry project structure
+    let foundry_root = std::path::PathBuf::from("./contracts/evm");
+
+    if !foundry_root.exists() {
+        if !cli.quiet {
+            println!("🔨 Initializing Foundry project...");
+        }
+
+        if cli.verbose {
+            info!("Running: forge init --force contracts/evm");
+        }
+
+        if !cli.dry_run {
+            let init_timer = Timer::start();
+            backends::foundry::run_forge(&["init", "--force", "contracts/evm"])
+                .map_err(enhance_error_with_suggestions)?;
+
+            if !cli.quiet {
+                println!(
+                    "{}",
+                    success(&format!(
+                        "Foundry project initialized ({})",
+                        init_timer.elapsed()
+                    ))
+                );
+                summary.add_operation("Foundry project structure created");
+            }
+        }
+    }
+
+    // Step 3: Generate Verifier.sol
+    if !cli.quiet {
+        println!("📝 Generating Solidity verifier contract...");
+    }
+
+    let verifier_path = foundry_root.join("src/Verifier.sol");
+    let vk_path = util::get_vk_path(Flavour::Bb);
+    let vk_str = vk_path.to_string_lossy();
+    let verifier_str = verifier_path.to_string_lossy();
+
+    let solidity_args = vec![
+        "write_solidity_verifier",
+        "-k",
+        &vk_str,
+        "-o",
+        &verifier_str,
+    ];
+
+    if cli.verbose {
+        info!("Running: bb {}", solidity_args.join(" "));
+    }
+
+    if !cli.dry_run {
+        // Ensure src directory exists
+        std::fs::create_dir_all(foundry_root.join("src")).map_err(|e| {
+            create_smart_error(
+                &format!("Failed to create src directory: {}", e),
+                &["Check directory permissions"],
+            )
+        })?;
+
+        let solidity_timer = Timer::start();
+        backends::bb::run(&solidity_args).map_err(enhance_error_with_suggestions)?;
+
+        if !cli.quiet {
+            println!(
+                "{}",
+                success(&format_operation_result(
+                    "Solidity verifier",
+                    &verifier_path,
+                    &solidity_timer
+                ))
+            );
+            summary.add_operation(&format!(
+                "Solidity verifier contract ({})",
+                util::format_file_size(&verifier_path)
+            ));
+        }
+    }
+
+    // Step 4: Create foundry.toml if it doesn't exist
+    let foundry_toml = foundry_root.join("foundry.toml");
+    if !foundry_toml.exists() {
+        if !cli.quiet && cli.verbose {
+            println!("📄 Creating foundry.toml configuration...");
+        }
+
+        if !cli.dry_run {
+            let toml_content = r#"[profile.default]
+solc_version = "0.8.25"
+optimizer = true
+optimizer_runs = 200
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true
+"#;
+            std::fs::write(&foundry_toml, toml_content).map_err(|e| {
+                create_smart_error(
+                    &format!("Failed to create foundry.toml: {}", e),
+                    &["Check directory permissions"],
+                )
+            })?;
+
+            if !cli.quiet && cli.verbose {
+                println!(
+                    "{}",
+                    success(&format!(
+                        "foundry.toml configuration created ({})",
+                        util::format_file_size(&foundry_toml)
+                    ))
+                );
+            }
+            summary.add_operation("Foundry configuration file created");
+        }
+    }
+
+    // Step 5: Build the Foundry project
+    if !cli.quiet {
+        println!("🔨 Building Foundry project...");
+    }
+
+    if cli.verbose {
+        info!("Running: forge build --root contracts/evm");
+    }
+
+    if !cli.dry_run {
+        let build_timer = Timer::start();
+        backends::foundry::run_forge(&["build", "--root", "contracts/evm"])
+            .map_err(enhance_error_with_suggestions)?;
+
+        if !cli.quiet {
+            println!(
+                "{}",
+                success(&format!(
+                    "Foundry project built successfully ({})",
+                    build_timer.elapsed()
+                ))
+            );
+            summary.add_operation("Foundry project compiled successfully");
+        }
+    }
+
+    if !cli.quiet {
+        summary.print();
+        println!();
+        println!("🎯 Next steps:");
+        println!("  1. Set up your .env file with RPC_URL and PRIVATE_KEY");
+        println!("  2. Deploy contract: bargo evm deploy --network sepolia");
+        println!("  3. Generate calldata: bargo evm calldata");
+        println!("  4. Verify on-chain: bargo evm verify-onchain");
+    }
+
+    Ok(())
+}
+
+/// Handle `evm deploy` command - Deploy verifier contract to EVM network
+fn handle_evm_deploy(cli: &Cli, network: &str) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Ensure Foundry is available
+    backends::foundry::ensure_available().map_err(enhance_error_with_suggestions)?;
+
+    // Check environment variables
+    let rpc_url = std::env::var("RPC_URL").map_err(|_| {
+        create_smart_error(
+            "RPC_URL environment variable not found",
+            &[
+                "Create a .env file in your project root",
+                "Add: RPC_URL=https://your-rpc-endpoint.com",
+                "For Sepolia: RPC_URL=https://eth-sepolia.g.alchemy.com/v2/your-key",
+                "For Mainnet: RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-key",
+            ],
+        )
+    })?;
+
+    let private_key = std::env::var("PRIVATE_KEY").map_err(|_| {
+        create_smart_error(
+            "PRIVATE_KEY environment variable not found",
+            &[
+                "Add to your .env file: PRIVATE_KEY=0x...",
+                "Make sure your private key starts with 0x",
+                "Never commit your .env file to version control",
+            ],
+        )
+    })?;
+
+    // Check that Verifier.sol exists
+    let verifier_path = std::path::PathBuf::from("./contracts/evm/src/Verifier.sol");
+    if !verifier_path.exists() {
+        return Err(create_smart_error(
+            "Verifier.sol not found",
+            &[
+                "Run 'bargo evm gen' first to generate the Solidity verifier",
+                "Ensure the Foundry project was created successfully",
+            ],
+        ));
+    }
+
+    if !cli.quiet {
+        println!("🚀 Deploying Verifier contract to {}...", network);
+    }
+
+    // Deploy using forge create
+    let deploy_args = vec![
+        "create",
+        "--rpc-url",
+        &rpc_url,
+        "--private-key",
+        &private_key,
+        "src/Verifier.sol:UltraVerifier",
+        "--root",
+        "contracts/evm",
+    ];
+
+    if cli.verbose {
+        info!("Running: forge {}", deploy_args.join(" "));
+    }
+
+    if cli.dry_run {
+        println!("Would run: forge {}", deploy_args.join(" "));
+        return Ok(());
+    }
+
+    let deploy_timer = Timer::start();
+    let (stdout, _stderr) = backends::foundry::run_forge_with_output(&deploy_args)
+        .map_err(enhance_error_with_suggestions)?;
+
+    // Parse deployment output to extract contract address
+    let contract_address = stdout
+        .lines()
+        .find(|line| line.contains("Deployed to:"))
+        .and_then(|line| line.split("Deployed to:").nth(1))
+        .map(|addr| addr.trim())
+        .ok_or_else(|| {
+            create_smart_error(
+                "Failed to parse contract address from forge output",
+                &[
+                    "Check that the deployment was successful",
+                    "Verify your RPC_URL and PRIVATE_KEY are correct",
+                    "Ensure you have sufficient funds for deployment",
+                ],
+            )
+        })?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format!(
+                "Contract deployed successfully ({})",
+                deploy_timer.elapsed()
+            ))
+        );
+        println!("📍 Contract address: {}", contract_address);
+        summary.add_operation(&format!("Contract deployed to {}", contract_address));
+    }
+
+    // Save contract address for future commands
+    std::fs::create_dir_all("./target/bb").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create target/bb directory: {}", e),
+            &["Check directory permissions"],
+        )
+    })?;
+
+    std::fs::write("./target/bb/.bargo_contract_address", contract_address).map_err(|e| {
+        create_smart_error(
+            &format!("Failed to save contract address: {}", e),
+            &["Check directory permissions"],
+        )
+    })?;
+
+    if !cli.quiet {
+        summary.print();
+        println!();
+        println!("🎯 Next steps:");
+        println!("  1. Generate calldata: bargo evm calldata");
+        println!("  2. Verify proof on-chain: bargo evm verify-onchain");
+    }
+
+    Ok(())
+}
+
+/// Handle `evm calldata` command - Generate calldata for proof verification
+fn handle_evm_calldata(cli: &Cli) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Ensure Foundry is available
+    backends::foundry::ensure_available().map_err(enhance_error_with_suggestions)?;
+
+    // Check that proof fields JSON exists
+    let proof_fields_path = std::path::PathBuf::from("./target/bb/proof_fields.json");
+    if !proof_fields_path.exists() {
+        return Err(create_smart_error(
+            "Proof fields file not found",
+            &[
+                "Run 'bargo evm gen' first to generate field-formatted proof",
+                "This command requires the proof in JSON field format",
+            ],
+        ));
+    }
+
+    // Check that public inputs fields JSON exists
+    let public_inputs_fields_path =
+        std::path::PathBuf::from("./target/bb/public_inputs_fields.json");
+    if !public_inputs_fields_path.exists() {
+        return Err(create_smart_error(
+            "Public inputs fields file not found",
+            &[
+                "Public inputs fields should be generated during proving",
+                "Run 'bargo evm gen' to regenerate with field format",
+            ],
+        ));
+    }
+
+    if !cli.quiet {
+        println!("📝 Generating calldata for proof verification...");
+    }
+
+    // Read proof fields JSON
+    let proof_fields_content = std::fs::read_to_string(&proof_fields_path).map_err(|e| {
+        create_smart_error(
+            &format!("Failed to read proof fields file: {}", e),
+            &["Check file permissions and try regenerating the proof"],
+        )
+    })?;
+
+    // Read public inputs fields JSON
+    let public_inputs_fields_content = std::fs::read_to_string(&public_inputs_fields_path)
+        .map_err(|e| {
+            create_smart_error(
+                &format!("Failed to read public inputs fields file: {}", e),
+                &["Check file permissions and try regenerating the proof"],
+            )
+        })?;
+
+    // Parse JSON arrays
+    let proof_fields: Vec<String> = serde_json::from_str(&proof_fields_content).map_err(|e| {
+        create_smart_error(
+            &format!("Failed to parse proof fields JSON: {}", e),
+            &["Check that the proof fields file is valid JSON"],
+        )
+    })?;
+
+    let public_inputs_fields: Vec<String> = serde_json::from_str(&public_inputs_fields_content)
+        .map_err(|e| {
+            create_smart_error(
+                &format!("Failed to parse public inputs fields JSON: {}", e),
+                &["Check that the public inputs fields file is valid JSON"],
+            )
+        })?;
+
+    // Convert proof fields array to bytes format for the verifier
+    // The UltraVerifier expects exactly 440 field elements, each 32 bytes
+    const EXPECTED_PROOF_SIZE: usize = 440;
+    let proof_fields_trimmed = if proof_fields.len() > EXPECTED_PROOF_SIZE {
+        &proof_fields[0..EXPECTED_PROOF_SIZE]
+    } else {
+        &proof_fields
+    };
+
+    // Each field element should be exactly 32 bytes (64 hex chars without 0x)
+    let proof_bytes: String = proof_fields_trimmed
+        .iter()
+        .map(|field| {
+            let hex_without_prefix = field.trim_start_matches("0x");
+            // Pad to 64 chars (32 bytes) if needed
+            format!("{:0>64}", hex_without_prefix)
+        })
+        .collect();
+    let proof_hex = format!("0x{}", proof_bytes);
+
+    if cli.verbose {
+        println!(
+            "Proof fields count: {} (using first {})",
+            proof_fields.len(),
+            proof_fields_trimmed.len()
+        );
+        println!("Public inputs count: {}", public_inputs_fields.len());
+        println!("Proof byte length: {}", proof_hex.len() - 2); // -2 for 0x prefix
+    }
+
+    // Due to command line length limits with very long proofs, we'll manually construct
+    // the ABI-encoded calldata instead of using cast abi-encode
+    if cli.verbose {
+        println!("Manually constructing ABI-encoded calldata...");
+    }
+
+    if cli.dry_run {
+        println!("Would manually construct ABI-encoded calldata for verify(bytes,bytes32[])");
+        println!("Proof hex length: {} chars", proof_hex.len());
+        println!("Public inputs array: [{}]", public_inputs_fields.join(","));
+        return Ok(());
+    }
+
+    let calldata_timer = Timer::start();
+
+    // Manually construct ABI-encoded calldata for verify(bytes,bytes32[])
+    // Function selector for verify(bytes,bytes32[])
+    let function_selector = "a8e16a41"; // First 4 bytes of keccak256("verify(bytes,bytes32[])")
+
+    // Convert proof hex to bytes (remove 0x prefix)
+    let proof_bytes_hex = proof_hex.trim_start_matches("0x");
+    let proof_length = proof_bytes_hex.len() / 2; // Length in bytes
+
+    // Calculate offsets
+    let bytes_offset = 64; // 0x40 - offset to bytes data (after two 32-byte offset fields)
+    let array_offset = bytes_offset + 32 + ((proof_length + 31) / 32) * 32; // Aligned to 32-byte boundary
+
+    // Construct the calldata
+    let mut calldata = String::new();
+    calldata.push_str("0x");
+    calldata.push_str(function_selector);
+
+    // Offset to bytes parameter (32 bytes)
+    calldata.push_str(&format!("{:0>64x}", bytes_offset));
+
+    // Offset to bytes32[] parameter (32 bytes)
+    calldata.push_str(&format!("{:0>64x}", array_offset));
+
+    // Length of bytes data (32 bytes)
+    calldata.push_str(&format!("{:0>64x}", proof_length));
+
+    // The proof bytes data (padded to 32-byte boundary)
+    calldata.push_str(proof_bytes_hex);
+    let padding_needed = (32 - (proof_length % 32)) % 32;
+    calldata.push_str(&"0".repeat(padding_needed * 2));
+
+    // Length of bytes32[] array (32 bytes)
+    calldata.push_str(&format!("{:0>64x}", public_inputs_fields.len()));
+
+    // The bytes32[] elements
+    for input in &public_inputs_fields {
+        let input_hex = input.trim_start_matches("0x");
+        calldata.push_str(&format!("{:0>64}", input_hex));
+    }
+
+    // Save calldata to file
+    std::fs::create_dir_all("./target/bb").map_err(|e| {
+        create_smart_error(
+            &format!("Failed to create target/bb directory: {}", e),
+            &["Check directory permissions"],
+        )
+    })?;
+
+    let calldata_path = std::path::PathBuf::from("./target/bb/calldata");
+    std::fs::write(&calldata_path, calldata).map_err(|e| {
+        create_smart_error(
+            &format!("Failed to write calldata file: {}", e),
+            &["Check directory permissions"],
+        )
+    })?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "Calldata generated",
+                &calldata_path,
+                &calldata_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "Calldata for proof verification ({})",
+            util::format_file_size(&calldata_path)
+        ));
+        summary.print();
+        println!();
+        println!("🎯 Next step:");
+        println!("  • Verify on-chain: bargo evm verify-onchain");
+    }
+
+    Ok(())
+}
+
+/// Handle `evm verify-onchain` command - Verify proof on EVM network
+fn handle_evm_verify_onchain(cli: &Cli) -> Result<()> {
+    let mut summary = OperationSummary::new();
+
+    // Ensure Foundry is available
+    backends::foundry::ensure_available().map_err(enhance_error_with_suggestions)?;
+
+    // Check environment variables
+    let rpc_url = std::env::var("RPC_URL").map_err(|_| {
+        create_smart_error(
+            "RPC_URL environment variable not found",
+            &[
+                "Create a .env file in your project root",
+                "Add: RPC_URL=https://your-rpc-endpoint.com",
+                "For Sepolia: RPC_URL=https://eth-sepolia.g.alchemy.com/v2/your-key",
+                "For Mainnet: RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-key",
+            ],
+        )
+    })?;
+
+    let private_key = std::env::var("PRIVATE_KEY").map_err(|_| {
+        create_smart_error(
+            "PRIVATE_KEY environment variable not found",
+            &[
+                "Add to your .env file: PRIVATE_KEY=0x...",
+                "Make sure your private key starts with 0x",
+                "Never commit your .env file to version control",
+            ],
+        )
+    })?;
+
+    // Load saved contract address
+    let contract_address_path = std::path::PathBuf::from("./target/bb/.bargo_contract_address");
+    if !contract_address_path.exists() {
+        return Err(create_smart_error(
+            "Contract address not found",
+            &[
+                "Run 'bargo evm deploy' first to deploy the verifier contract",
+                "Ensure the deployment was successful",
+            ],
+        ));
+    }
+
+    let contract_address = std::fs::read_to_string(&contract_address_path)
+        .map_err(|e| {
+            create_smart_error(
+                &format!("Failed to read contract address: {}", e),
+                &["Check file permissions and try redeploying"],
+            )
+        })?
+        .trim()
+        .to_string();
+
+    // Load generated calldata
+    let calldata_path = std::path::PathBuf::from("./target/bb/calldata");
+    if !calldata_path.exists() {
+        return Err(create_smart_error(
+            "Calldata not found",
+            &[
+                "Run 'bargo evm calldata' first to generate calldata",
+                "Ensure the proof and public inputs exist",
+            ],
+        ));
+    }
+
+    let calldata = std::fs::read_to_string(&calldata_path)
+        .map_err(|e| {
+            create_smart_error(
+                &format!("Failed to read calldata: {}", e),
+                &["Check file permissions and try regenerating calldata"],
+            )
+        })?
+        .trim()
+        .to_string();
+
+    if !cli.quiet {
+        println!("🚀 Verifying proof on-chain...");
+        println!("📍 Contract: {}", contract_address);
+    }
+
+    // Send verification transaction using cast
+    let verify_args = vec![
+        "send",
+        &contract_address,
+        "verify(bytes,bytes32[])",
+        &calldata,
+        "--rpc-url",
+        &rpc_url,
+        "--private-key",
+        &private_key,
+    ];
+
+    if cli.verbose {
+        info!("Running: cast {}", verify_args.join(" "));
+    }
+
+    if cli.dry_run {
+        println!("Would run: cast {}", verify_args.join(" "));
+        return Ok(());
+    }
+
+    let verify_timer = Timer::start();
+    let (stdout, _stderr) = backends::foundry::run_cast_with_output(&verify_args)
+        .map_err(enhance_error_with_suggestions)?;
+
+    // Parse transaction hash from output
+    let tx_hash = stdout
+        .lines()
+        .find(|line| line.contains("transactionHash"))
+        .and_then(|line| line.split('"').nth(3))
+        .or_else(|| {
+            // Alternative parsing for different output formats
+            stdout
+                .lines()
+                .find(|line| line.starts_with("0x") && line.len() == 66)
+                .map(|line| line.trim())
+        })
+        .ok_or_else(|| {
+            create_smart_error(
+                "Failed to parse transaction hash from cast output",
+                &[
+                    "Check that the transaction was successful",
+                    "Verify your RPC_URL and PRIVATE_KEY are correct",
+                    "Ensure you have sufficient funds for gas",
+                    "Check that the contract address is correct",
+                ],
+            )
+        })?;
+
+    if !cli.quiet {
+        println!(
+            "{}",
+            success(&format!(
+                "Proof verified on-chain successfully ({})",
+                verify_timer.elapsed()
+            ))
+        );
+        println!("📋 Transaction hash: {}", tx_hash);
+
+        // Try to provide explorer link if we can detect the network
+        if rpc_url.contains("sepolia") {
+            println!(
+                "🔗 View on Etherscan: https://sepolia.etherscan.io/tx/{}",
+                tx_hash
+            );
+        } else if rpc_url.contains("mainnet") || !rpc_url.contains("sepolia") {
+            println!("🔗 View on Etherscan: https://etherscan.io/tx/{}", tx_hash);
+        }
+
+        summary.add_operation(&format!("Proof verified on-chain (tx: {})", tx_hash));
+        summary.print();
+    }
+
+    Ok(())
 }
