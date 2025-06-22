@@ -1,6 +1,46 @@
+<div align="center">
+  <img src="https://i.imgur.com/bargo-logo.png" alt="bargo logo" width="400"/>
+</div>
+
 # bargo
 
 A developer-friendly CLI wrapper for Noir ZK development that consolidates `nargo` and `bb` workflows into a single, opinionated tool with full support for both **EVM** and **Starknet** deployments.
+
+## Table of Contents
+
+- [Motivation](#motivation)
+- [Command Specification](#command-specification)
+  - [Global Flags](#global-flags)
+- [Features Checklist](#features-checklist)
+  - [Core Commands](#core-commands)
+  - [EVM Commands](#evm-commands-requires-foundry---fully-tested-end-to-end)
+  - [Cairo Commands](#cairo-commands-requires-garaga---fully-tested-on-mainnet)
+  - [CLI Infrastructure](#cli-infrastructure)
+  - [Path Intelligence](#path-intelligence)
+  - [Smart Features](#smart-features)
+  - [User Experience](#user-experience)
+- [Installation](#installation)
+  - [EVM/Foundry Support](#evmfoundry-support-optional)
+  - [Cairo/Starknet Support](#cairostarknet-support-optional)
+- [Usage Examples](#usage-examples)
+  - [Check Dependencies](#check-dependencies)
+  - [Basic Development Workflow](#basic-development-workflow-evmsolidity)
+  - [EVM Verifier Generation](#evm-verifier-generation-legacy)
+  - [EVM Workflow](#evm-workflow-requires-foundry---production-ready)
+  - [Cairo/Starknet Workflow](#cairostarknet-workflow-requires-garaga---production-ready)
+  - [Development Iteration](#development-iteration)
+  - [Cross-Backend Management](#cross-backend-management)
+  - [Debugging Workflow](#debugging-workflow)
+  - [Cross-Chain Development](#cross-chain-development)
+- [Technical Implementation](#technical-implementation)
+  - [Architecture](#architecture)
+  - [Key Design Decisions](#key-design-decisions)
+  - [Dependencies](#dependencies)
+- [Future Roadmap](#future-roadmap)
+- [Contributing](#contributing)
+- [Production-Ready Cairo/Starknet Integration](#production-ready-cairostarknet-integration)
+- [Target User Persona](#target-user-persona)
+- [Blockchain Ecosystem Comparison](#blockchain-ecosystem-comparison)
 
 ## Motivation
 
