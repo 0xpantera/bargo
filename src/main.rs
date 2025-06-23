@@ -1465,72 +1465,99 @@ fn handle_cairo_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
         }
     };
 
-    // Deploy Cairo verifier contract using garaga
-    let garaga_args = vec!["deploy", "--class-hash", &hash];
+    // Load environment variables from .secrets file
+    if std::path::Path::new(".secrets").exists() {
+        dotenv::from_filename(".secrets").ok();
+    }
+
+    // Determine network credentials (prefer mainnet, fallback to sepolia)
+    let rpc_url = std::env::var("MAINNET_RPC_URL")
+        .or_else(|_| std::env::var("SEPOLIA_RPC_URL"))
+        .map_err(|_| {
+            create_smart_error(
+                "RPC URL environment variable not found",
+                &[
+                    "Add MAINNET_RPC_URL or SEPOLIA_RPC_URL to your .secrets file",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?;
+
+    let account_address = std::env::var("MAINNET_ACCOUNT_ADDRESS")
+        .or_else(|_| std::env::var("SEPOLIA_ACCOUNT_ADDRESS"))
+        .map_err(|_| {
+            create_smart_error(
+                "Account address environment variable not found",
+                &[
+                    "Add MAINNET_ACCOUNT_ADDRESS or SEPOLIA_ACCOUNT_ADDRESS to your .secrets file",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?;
+
+    let private_key = std::env::var("MAINNET_ACCOUNT_PRIVATE_KEY")
+        .or_else(|_| std::env::var("SEPOLIA_ACCOUNT_PRIVATE_KEY"))
+        .map_err(|_| {
+            create_smart_error(
+                "Account private key environment variable not found",
+                &[
+                    "Add MAINNET_ACCOUNT_PRIVATE_KEY or SEPOLIA_ACCOUNT_PRIVATE_KEY to your .secrets file",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?;
+
+    // Deploy Cairo verifier contract using starkli
+    let starkli_args = vec![
+        "deploy",
+        "--class-hash",
+        &hash,
+        "--rpc",
+        &rpc_url,
+        "--account",
+        &account_address,
+        "--private-key",
+        &private_key,
+    ];
 
     if cli.verbose {
-        info!("Running: garaga {}", garaga_args.join(" "));
-        info!("Deploying contract with class hash: {}", hash);
+        info!("Running: starkli {}", starkli_args.join(" "));
     }
 
     if cli.dry_run {
-        println!("Would run: garaga {}", garaga_args.join(" "));
+        println!("Would run: starkli {}", starkli_args.join(" "));
         return Ok(());
     }
 
     let deploy_timer = Timer::start();
-    let (stdout, stderr) =
-        backends::garaga::run_with_output(&garaga_args).map_err(enhance_error_with_suggestions)?;
+    let starkli_output = std::process::Command::new("starkli")
+        .args(&starkli_args)
+        .output()
+        .map_err(|e| {
+            create_smart_error(
+                &format!("Failed to run starkli deploy: {}", e),
+                &["Ensure starkli is installed and available in PATH"],
+            )
+        })?;
 
-    // Debug output to see what we're capturing
-    if cli.verbose {
-        println!("=== GARAGA DEPLOY OUTPUT ===");
-        println!("STDOUT:\n{}", stdout);
-        println!("STDERR:\n{}", stderr);
-        println!("===========================");
-    }
-
-    // Check for deployment errors in garaga output
-    if stdout.contains("Deployment error")
-        || stdout.contains("Contract not deployed")
-        || stdout.contains("Out of gas")
-    {
+    if !starkli_output.status.success() {
+        let stderr = String::from_utf8_lossy(&starkli_output.stderr);
+        let stdout = String::from_utf8_lossy(&starkli_output.stdout);
         return Err(create_smart_error(
-            "Contract deployment failed",
-            &[
-                "The garaga deploy command failed with errors",
-                "Check the error output above for details",
-                "This may be due to insufficient gas, network issues, or account problems",
-                "Try running the command again or check your account funding",
-            ],
+            &format!("Starkli deploy failed: {}{}", stdout, stderr),
+            &["Check your account balance and network connectivity"],
         ));
     }
 
-    // Parse contract address from garaga output
+    let output = String::from_utf8_lossy(&starkli_output.stdout);
+
+    // Parse contract address from starkli output
     let mut contract_address = String::new();
-    for line in stdout.lines() {
-        if cli.verbose {
-            println!("Processing line: {}", line);
-        }
-        if line.contains("Contract address on")
-            || line.contains("Contract successfully deployed at")
-            || line.contains("Contract already deployed at")
-            || line.contains("Contract found at")
-        {
-            if cli.verbose {
-                println!("Found address line: {}", line);
-            }
-            // Extract hex address (0x followed by hex chars)
-            if let Some(start) = line.find("0x") {
-                let addr_part = &line[start..];
-                if let Some(end) = addr_part.find(char::is_whitespace) {
-                    contract_address = addr_part[..end].to_string();
-                } else {
-                    contract_address = addr_part.to_string();
-                }
-                if cli.verbose {
-                    println!("Extracted address: {}", contract_address);
-                }
+    for line in output.lines() {
+        if let Some(start) = line.find("0x") {
+            let addr = &line[start..];
+            if addr.len() >= 66 {
+                contract_address = addr.split_whitespace().next().unwrap_or("").to_string();
                 break;
             }
         }
