@@ -1268,53 +1268,30 @@ fn handle_cairo_declare(cli: &Cli, network: &str) -> Result<()> {
         })?
     };
 
-    let account_address = if network == "mainnet" {
-        std::env::var("MAINNET_ACCOUNT_ADDRESS").map_err(|_| {
-            create_smart_error(
-                "MAINNET_ACCOUNT_ADDRESS environment variable not found",
-                &[
-                    "Add to your .secrets file: MAINNET_ACCOUNT_ADDRESS=0x...",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?
-    } else {
-        std::env::var("SEPOLIA_ACCOUNT_ADDRESS").map_err(|_| {
-            create_smart_error(
-                "SEPOLIA_ACCOUNT_ADDRESS environment variable not found",
-                &[
-                    "Add to your .secrets file: SEPOLIA_ACCOUNT_ADDRESS=0x...",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?
-    };
+    // Get account and keystore paths from environment variables
+    let account_path = std::env::var("STARKNET_ACCOUNT").map_err(|_| {
+        create_smart_error(
+            "STARKNET_ACCOUNT environment variable not found",
+            &[
+                "Add to your .secrets file: STARKNET_ACCOUNT=path/to/account.json",
+                "This should point to your starkli account configuration file",
+            ],
+        )
+    })?;
 
-    let private_key = if network == "mainnet" {
-        std::env::var("MAINNET_ACCOUNT_PRIVATE_KEY").map_err(|_| {
-            create_smart_error(
-                "MAINNET_ACCOUNT_PRIVATE_KEY environment variable not found",
-                &[
-                    "Add to your .secrets file: MAINNET_ACCOUNT_PRIVATE_KEY=0x...",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?
-    } else {
-        std::env::var("SEPOLIA_ACCOUNT_PRIVATE_KEY").map_err(|_| {
-            create_smart_error(
-                "SEPOLIA_ACCOUNT_PRIVATE_KEY environment variable not found",
-                &[
-                    "Add to your .secrets file: SEPOLIA_ACCOUNT_PRIVATE_KEY=0x...",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?
-    };
+    let keystore_path = std::env::var("STARKNET_KEYSTORE").map_err(|_| {
+        create_smart_error(
+            "STARKNET_KEYSTORE environment variable not found",
+            &[
+                "Add to your .secrets file: STARKNET_KEYSTORE=path/to/keystore.json",
+                "This should point to your starkli keystore file",
+            ],
+        )
+    })?;
 
     // Declare Cairo verifier contract using starkli
     let compiled_contract_path = format!(
-        "./contracts/cairo/target/dev/cairo_UltraStarknetZKHonkVerifier.compiled_contract_class.json"
+        "./contracts/cairo/target/dev/cairo_UltraStarknetZKHonkVerifier.contract_class.json"
     );
 
     let starkli_args = vec![
@@ -1323,9 +1300,11 @@ fn handle_cairo_declare(cli: &Cli, network: &str) -> Result<()> {
         "--rpc",
         &rpc_url,
         "--account",
-        &account_address,
-        "--private-key",
-        &private_key,
+        &account_path,
+        "--keystore",
+        &keystore_path,
+        "--casm-file",
+        "./contracts/cairo/target/dev/cairo_UltraStarknetZKHonkVerifier.compiled_contract_class.json",
     ];
 
     if cli.verbose {
@@ -1467,57 +1446,55 @@ fn handle_cairo_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
 
     // Load environment variables from .secrets file
     if std::path::Path::new(".secrets").exists() {
-        dotenv::from_filename(".secrets").ok();
+        if let Err(e) = dotenv::from_filename(".secrets") {
+            if cli.verbose {
+                eprintln!("Warning: Failed to load .secrets file: {}", e);
+            }
+        }
     }
 
-    // Determine network credentials (prefer mainnet, fallback to sepolia)
-    let rpc_url = std::env::var("MAINNET_RPC_URL")
-        .or_else(|_| std::env::var("SEPOLIA_RPC_URL"))
-        .map_err(|_| {
-            create_smart_error(
-                "RPC URL environment variable not found",
-                &[
-                    "Add MAINNET_RPC_URL or SEPOLIA_RPC_URL to your .secrets file",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?;
+    // Get RPC URL (default to mainnet)
+    let rpc_url = std::env::var("MAINNET_RPC_URL").map_err(|_| {
+        create_smart_error(
+            "MAINNET_RPC_URL environment variable not found",
+            &[
+                "Add to your .secrets file: MAINNET_RPC_URL=https://starknet-mainnet.g.alchemy.com/starknet/version/rpc/v0_8/your_key",
+                "Ensure the .secrets file is loaded in your environment",
+            ],
+        )
+    })?;
 
-    let account_address = std::env::var("MAINNET_ACCOUNT_ADDRESS")
-        .or_else(|_| std::env::var("SEPOLIA_ACCOUNT_ADDRESS"))
-        .map_err(|_| {
-            create_smart_error(
-                "Account address environment variable not found",
-                &[
-                    "Add MAINNET_ACCOUNT_ADDRESS or SEPOLIA_ACCOUNT_ADDRESS to your .secrets file",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?;
+    // Get account and keystore paths from environment variables
+    let account_path = std::env::var("STARKNET_ACCOUNT").map_err(|_| {
+        create_smart_error(
+            "STARKNET_ACCOUNT environment variable not found",
+            &[
+                "Add to your .secrets file: STARKNET_ACCOUNT=path/to/account.json",
+                "This should point to your starkli account configuration file",
+            ],
+        )
+    })?;
 
-    let private_key = std::env::var("MAINNET_ACCOUNT_PRIVATE_KEY")
-        .or_else(|_| std::env::var("SEPOLIA_ACCOUNT_PRIVATE_KEY"))
-        .map_err(|_| {
-            create_smart_error(
-                "Account private key environment variable not found",
-                &[
-                    "Add MAINNET_ACCOUNT_PRIVATE_KEY or SEPOLIA_ACCOUNT_PRIVATE_KEY to your .secrets file",
-                    "Ensure the .secrets file is loaded in your environment",
-                ],
-            )
-        })?;
+    let keystore_path = std::env::var("STARKNET_KEYSTORE").map_err(|_| {
+        create_smart_error(
+            "STARKNET_KEYSTORE environment variable not found",
+            &[
+                "Add to your .secrets file: STARKNET_KEYSTORE=path/to/keystore.json",
+                "This should point to your starkli keystore file",
+            ],
+        )
+    })?;
 
     // Deploy Cairo verifier contract using starkli
     let starkli_args = vec![
         "deploy",
-        "--class-hash",
         &hash,
         "--rpc",
         &rpc_url,
         "--account",
-        &account_address,
-        "--private-key",
-        &private_key,
+        &account_path,
+        "--keystore",
+        &keystore_path,
     ];
 
     if cli.verbose {

@@ -232,9 +232,13 @@ SEPOLIA_ACCOUNT_ADDRESS=0x...
 MAINNET_RPC_URL="https://starknet-mainnet.g.alchemy.com/starknet/version/rpc/v0_8/your_key"  
 MAINNET_ACCOUNT_PRIVATE_KEY=0x...
 MAINNET_ACCOUNT_ADDRESS=0x...
+
+# Starkli account and keystore configuration
+STARKNET_ACCOUNT=path/to/your-account.json
+STARKNET_KEYSTORE=path/to/your-keystore.json
 ```
 
-**Note**: Replace the private keys and addresses with your own. The CLI automatically loads this file when running Cairo commands.
+**Note**: Replace the private keys, addresses, and file paths with your own. The CLI automatically loads this file when running Cairo commands. The `STARKNET_ACCOUNT` and `STARKNET_KEYSTORE` variables should point to your starkli account configuration and keystore files respectively.
 
 ## Usage Examples
 
