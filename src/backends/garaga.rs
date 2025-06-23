@@ -82,8 +82,8 @@ mod tests {
         // This test will pass if garaga is installed, otherwise it will show
         // the helpful error message
         match ensure_available() {
-            Ok(_) => println!("✓ garaga is available"),
-            Err(e) => println!("✗ garaga not available: {}", e),
+            Ok(_) => println!("{}", crate::util::success("garaga is available")),
+            Err(e) => println!("{}", crate::util::error(&format!("garaga not available: {}", e))),
         }
     }
 }

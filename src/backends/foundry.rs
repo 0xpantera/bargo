@@ -159,8 +159,8 @@ mod tests {
         // This test will pass if Foundry is installed, otherwise it will show
         // the helpful error message
         match ensure_available() {
-            Ok(_) => println!("✓ Foundry (forge and cast) is available"),
-            Err(e) => println!("✗ Foundry not available: {}", e),
+            Ok(_) => println!("{}", crate::util::success("Foundry (forge and cast) is available")),
+            Err(e) => println!("{}", crate::util::error(&format!("Foundry not available: {}", e))),
         }
     }
 }
