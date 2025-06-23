@@ -101,7 +101,7 @@ echo "📦 Installing bb ${BB_VERSION} via bbup"
 bash -ic "bbup --version ${BB_VERSION}"
 
 ### ===== garaga =====
-pip install --upgrade "garaga==$GARAGA_VERSION"
+uv pip install "garaga==$GARAGA_VERSION"
 
 ### ===== starkli =====
 if ! command -v starkli >/dev/null; then
