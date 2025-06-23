@@ -109,7 +109,7 @@ bargo rebuild       # ← clean + build in one step
 - [x] `bargo evm calldata` - generate ABI-encoded calldata for proof verification
 - [x] `bargo evm verify-onchain` - verify proof on-chain using deployed EVM verifier
 
-### Cairo Commands (requires garaga) - ✅ FULLY TESTED ON MAINNET
+### Cairo Commands (requires garaga and starkli) - ✅ FULLY TESTED ON MAINNET
 - [x] `bargo cairo gen` - generate optimized Cairo verifier contract for Starknet
 - [x] `bargo cairo data` - generate calldata JSON for proof verification  
 - [x] `bargo cairo declare` - declare verifier contract on Starknet (auto-saves class hash)
@@ -201,7 +201,7 @@ bb --version     # Should show 0.87.4-starknet.1
 
 **⚠️ Version Compatibility Critical**: Cairo commands will fail with incorrect versions. Always verify your installations match the requirements above.
 
-**Note**: All basic features work without additional dependencies. EVM features (`bargo evm ...`) require Foundry. Cairo features (`bargo cairo ...`) require garaga.
+**Note**: All basic features work without additional dependencies. EVM features (`bargo evm ...`) require Foundry. Cairo features (`bargo cairo ...`) require garaga and starkli.
 
 #### EVM Environment Setup
 
@@ -297,7 +297,7 @@ bargo evm verify-onchain              # ✅ Proof verified on-chain
 - **Gas Efficient**: Standard proof format optimized for Ethereum
 - **Developer Friendly**: Familiar Foundry workflow with enhanced tooling
 
-### Cairo/Starknet Workflow (requires garaga) - ✅ PRODUCTION READY
+### Cairo/Starknet Workflow (requires garaga and starkli) - ✅ PRODUCTION READY
 
 **Complete End-to-End Workflow:**
 
