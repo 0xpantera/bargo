@@ -87,16 +87,18 @@ fi
 echo "📦 Installing nargo ${NARGO_VERSION} via noirup"
 bash -ic "noirup --version ${NARGO_VERSION}"
 
-### ===== bbup / bb =====
-if ! command -v bbup >/dev/null; then
-  echo "🔧 Installing bbup…"
+### ===== bbup / Barretenberg (bb) =====
+echo "🔧 Installing or updating bbup…"
+
+if ! command -v bbup >/dev/null 2>&1; then
+  # download installer with the existing fetch helper
   fetch https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install /tmp/bbup_install
-  bash /tmp/bbup_install -y
-  need_path
+  bash /tmp/bbup_install          # writes bbup alias into ~/.bashrc
 fi
 
-echo "📦 Installing bb $BB_VERSION"
-bbup --version "$BB_VERSION"
+# bbup behaves like noirup: alias added to ~/.bashrc
+echo "📦 Installing bb ${BB_VERSION} via bbup"
+bash -ic "bbup --version ${BB_VERSION}"
 
 ### ===== garaga =====
 pip install --upgrade "garaga==$GARAGA_VERSION"
