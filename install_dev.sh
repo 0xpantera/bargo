@@ -75,23 +75,34 @@ fi
 source .venv/bin/activate
 
 ### ===== noirup / nargo =====
-echo "🔧 Ensuring noirup (Noir tool installer)…"
+echo "🔧 Installing or updating noirup…"
 
-if ! command -v noirup >/dev/null; then
-  # download & run installer via our fetch helper
+if ! command -v noirup >/dev/null 2>&1; then
   fetch https://raw.githubusercontent.com/noir-lang/noirup/main/install /tmp/noirup_install
   bash /tmp/noirup_install -y
 fi
 
-# ── make noirup visible **inside this same script run** ─────────────
-source "$HOME/.bashrc" 2>/dev/null || true          # pull in PATH edits
-export PATH="$HOME/.local/bin:$HOME/.noirup/bin:$PATH"
-hash -r                                             # refresh bash’s hash table
-need_path                                           # persist path if still missing
-# ────────────────────────────────────────────────────────────────────
+# ── locate noirup regardless of where the installer dropped it
+NOIRUP_BIN="$(command -v noirup 2>/dev/null || true)"
+if [ -z "$NOIRUP_BIN" ]; then
+  # common locations used by the installer
+  for p in "$HOME/.noirup/bin/noirup" "$HOME/.local/bin/noirup"; do
+    [ -x "$p" ] && NOIRUP_BIN="$p" && break
+  done
+fi
+
+if [ -z "$NOIRUP_BIN" ]; then
+  echo "❌  noirup binary not found even after installation. Aborting." >&2
+  exit 1
+fi
+
+# add its directory to PATH for the remainder of the script *and* future shells
+NOIRUP_DIR="$(dirname "$NOIRUP_BIN")"
+export PATH="$NOIRUP_DIR:$PATH"
+need_path
 
 echo "📦 Installing nargo $NARGO_VERSION via noirup"
-noirup --version "$NARGO_VERSION"
+"$NOIRUP_BIN" --version "$NARGO_VERSION"
 
 ### ===== bbup / bb =====
 if ! command -v bbup >/dev/null; then
