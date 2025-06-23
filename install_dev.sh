@@ -78,31 +78,14 @@ source .venv/bin/activate
 echo "🔧 Installing or updating noirup…"
 
 if ! command -v noirup >/dev/null 2>&1; then
+  # download the installer using the existing fetch helper
   fetch https://raw.githubusercontent.com/noir-lang/noirup/main/install /tmp/noirup_install
-  bash /tmp/noirup_install -y
+  bash /tmp/noirup_install          # writes an alias into ~/.bashrc
 fi
 
-# ── locate noirup regardless of where the installer dropped it
-NOIRUP_BIN="$(command -v noirup 2>/dev/null || true)"
-if [ -z "$NOIRUP_BIN" ]; then
-  # common locations used by the installer
-  for p in "$HOME/.noirup/bin/noirup" "$HOME/.local/bin/noirup"; do
-    [ -x "$p" ] && NOIRUP_BIN="$p" && break
-  done
-fi
-
-if [ -z "$NOIRUP_BIN" ]; then
-  echo "❌  noirup binary not found even after installation. Aborting." >&2
-  exit 1
-fi
-
-# add its directory to PATH for the remainder of the script *and* future shells
-NOIRUP_DIR="$(dirname "$NOIRUP_BIN")"
-export PATH="$NOIRUP_DIR:$PATH"
-need_path
-
-echo "📦 Installing nargo $NARGO_VERSION via noirup"
-"$NOIRUP_BIN" --version "$NARGO_VERSION"
+# noirup is an alias/function added to ~/.bashrc – we need an interactive shell
+echo "📦 Installing nargo ${NARGO_VERSION} via noirup"
+bash -ic "noirup --version ${NARGO_VERSION}"
 
 ### ===== bbup / bb =====
 if ! command -v bbup >/dev/null; then
