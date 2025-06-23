@@ -40,3 +40,20 @@ pub fn spawn_cmd(cmd_name: &str, args: &[&str]) -> Result<()> {
     debug!("{} command completed successfully", cmd_name);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spawn_cmd_success() {
+        // Should succeed running a simple echo command
+        assert!(spawn_cmd("echo", &["hello"]).is_ok());
+    }
+
+    #[test]
+    fn test_spawn_cmd_failure() {
+        // The `false` command exits with a non-zero status
+        assert!(spawn_cmd("false", &[]).is_err());
+    }
+}
