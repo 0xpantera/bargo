@@ -16,7 +16,7 @@ A developer-friendly CLI wrapper for Noir ZK development that consolidates `narg
 - [Features Checklist](#features-checklist)
   - [Core Commands](#core-commands)
   - [EVM Commands](#evm-commands-requires-foundry---fully-tested-end-to-end)
-  - [Cairo Commands](#cairo-commands-requires-garaga---fully-tested-on-mainnet)
+  - [Cairo Commands](#cairo-commands-requires-garaga-and-starkli---fully-tested-on-mainnet)
   - [CLI Infrastructure](#cli-infrastructure)
   - [Path Intelligence](#path-intelligence)
   - [Smart Features](#smart-features)
@@ -29,7 +29,7 @@ A developer-friendly CLI wrapper for Noir ZK development that consolidates `narg
   - [Basic Development Workflow](#basic-development-workflow-evmsolidity)
   - [EVM Verifier Generation](#evm-verifier-generation-legacy)
   - [EVM Workflow](#evm-workflow-requires-foundry---production-ready)
-  - [Cairo/Starknet Workflow](#cairostarknet-workflow-requires-garaga---production-ready)
+  - [Cairo/Starknet Workflow](#cairostarknet-workflow-requires-garaga-and-starkli---production-ready)
   - [Development Iteration](#development-iteration)
   - [Cross-Backend Management](#cross-backend-management)
   - [Debugging Workflow](#debugging-workflow)
@@ -109,7 +109,7 @@ bargo rebuild       # ← clean + build in one step
 - [x] `bargo evm calldata` - generate ABI-encoded calldata for proof verification
 - [x] `bargo evm verify-onchain` - verify proof on-chain using deployed EVM verifier
 
-### Cairo Commands (requires garaga) - ✅ FULLY TESTED ON MAINNET
+### Cairo Commands (requires garaga and starkli) - ✅ FULLY TESTED ON MAINNET
 - [x] `bargo cairo gen` - generate optimized Cairo verifier contract for Starknet
 - [x] `bargo cairo data` - generate calldata JSON for proof verification  
 - [x] `bargo cairo declare` - declare verifier contract on Starknet (auto-saves class hash)
@@ -172,7 +172,7 @@ cast --version
 
 ### Cairo/Starknet Support (Optional)
 
-For Cairo verifier generation and Starknet deployment features, you'll need specific versions of garaga, noir, and bb:
+For Cairo verifier generation and Starknet deployment features, you'll need specific versions of garaga, starkli, noir, and bb:
 
 **Requirements (read carefully to avoid 99% of issues!):**
 - Garaga CLI Python package version 0.18.1
@@ -201,7 +201,7 @@ bb --version     # Should show 0.87.4-starknet.1
 
 **⚠️ Version Compatibility Critical**: Cairo commands will fail with incorrect versions. Always verify your installations match the requirements above.
 
-**Note**: All basic features work without additional dependencies. EVM features (`bargo evm ...`) require Foundry. Cairo features (`bargo cairo ...`) require garaga.
+**Note**: All basic features work without additional dependencies. EVM features (`bargo evm ...`) require Foundry. Cairo features (`bargo cairo ...`) require garaga and starkli.
 
 #### EVM Environment Setup
 
@@ -243,8 +243,9 @@ MAINNET_ACCOUNT_ADDRESS=0x...
 ```bash
 # Verify all tools are installed
 bargo doctor       # ✅ nargo: /usr/local/bin/nargo
-                   # ✅ bb: /usr/local/bin/bb  
+                   # ✅ bb: /usr/local/bin/bb
                    # ✅ garaga: /usr/local/bin/garaga
+                   # ✅ starkli: /usr/local/bin/starkli
                    # 🎉 All required dependencies are available!
 ```
 
@@ -297,7 +298,7 @@ bargo evm verify-onchain              # ✅ Proof verified on-chain
 - **Gas Efficient**: Standard proof format optimized for Ethereum
 - **Developer Friendly**: Familiar Foundry workflow with enhanced tooling
 
-### Cairo/Starknet Workflow (requires garaga) - ✅ PRODUCTION READY
+### Cairo/Starknet Workflow (requires garaga and starkli) - ✅ PRODUCTION READY
 
 **Complete End-to-End Workflow:**
 

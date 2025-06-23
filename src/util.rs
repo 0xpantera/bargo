@@ -679,10 +679,16 @@ authors = ["test"]
 
     #[test]
     fn test_path_helpers() {
-        assert_eq!(get_bytecode_path("test"), PathBuf::from("target/test.json"));
-        assert_eq!(get_witness_path("test"), PathBuf::from("target/test.gz"));
-        assert_eq!(get_proof_path(), PathBuf::from("target/proof"));
-        assert_eq!(get_vk_path(), PathBuf::from("target/vk"));
+        assert_eq!(
+            get_bytecode_path("test", Flavour::Bb),
+            PathBuf::from("target/bb/test.json")
+        );
+        assert_eq!(
+            get_witness_path("test", Flavour::Bb),
+            PathBuf::from("target/bb/test.gz")
+        );
+        assert_eq!(get_proof_path(Flavour::Bb), PathBuf::from("target/bb/proof"));
+        assert_eq!(get_vk_path(Flavour::Bb), PathBuf::from("target/bb/vk"));
     }
 
     #[test]

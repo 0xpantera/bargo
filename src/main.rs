@@ -1733,6 +1733,22 @@ fn handle_doctor(cli: &Cli) -> Result<()> {
         }
     }
 
+    // Check starkli (required for declaring on Starknet)
+    match which::which("starkli") {
+        Ok(path) => {
+            if !cli.quiet {
+                println!("✅ starkli: {}", path.display());
+            }
+        }
+        Err(_) => {
+            if !cli.quiet {
+                println!("⚠️  starkli: not found (required for Starknet operations)");
+                println!("   Install with: curl -L https://get.starkli.sh | sh");
+            }
+            all_good = false;
+        }
+    }
+
     // Check forge (optional for EVM features)
     match which::which("forge") {
         Ok(path) => {
@@ -1774,7 +1790,7 @@ fn handle_doctor(cli: &Cli) -> Result<()> {
             println!("🚨 Some required dependencies are missing.");
             println!("   Core features require: nargo + bb");
             println!("   EVM deployment features also require: forge + cast");
-            println!("   Cairo features also require: garaga");
+            println!("   Cairo features also require: garaga + starkli");
         }
     }
 
