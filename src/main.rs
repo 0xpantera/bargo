@@ -1042,7 +1042,7 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
         "--vk",
         &vk_str,
         "--project-name",
-        &pkg_name,
+        "cairo",
     ];
 
     if cli.verbose {
@@ -1052,8 +1052,75 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
     let garaga_timer = Timer::start();
     backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
 
+    // Move the generated cairo directory to contracts/cairo
+    let temp_cairo_dir = std::path::PathBuf::from("./cairo");
+    let target_cairo_dir = std::path::PathBuf::from("./contracts/cairo");
+
+    if temp_cairo_dir.exists() {
+        // Remove target directory if it exists
+        if target_cairo_dir.exists() {
+            std::fs::remove_dir_all(&target_cairo_dir).map_err(|e| {
+                create_smart_error(
+                    &format!("Failed to remove existing cairo directory: {}", e),
+                    &["Check directory permissions"],
+                )
+            })?;
+        }
+
+        // Move the directory
+        std::fs::rename(&temp_cairo_dir, &target_cairo_dir).map_err(|e| {
+            create_smart_error(
+                &format!("Failed to move cairo directory: {}", e),
+                &[
+                    "Check directory permissions",
+                    "Ensure you have write access to the contracts directory",
+                ],
+            )
+        })?;
+    }
+
+    // Build the Cairo project using scarb
+    let scarb_build_args = vec!["build"];
+    let scarb_timer = Timer::start();
+
+    if cli.verbose {
+        info!(
+            "Running: scarb {} in contracts/cairo/",
+            scarb_build_args.join(" ")
+        );
+    }
+
+    if !cli.dry_run {
+        let scarb_output = std::process::Command::new("scarb")
+            .args(&scarb_build_args)
+            .current_dir("./contracts/cairo")
+            .output()
+            .map_err(|e| {
+                create_smart_error(
+                    &format!("Failed to run scarb build: {}", e),
+                    &[
+                        "Ensure scarb is installed and available in PATH",
+                        "Check that the Cairo project was generated correctly",
+                        "Verify you're in the correct directory",
+                    ],
+                )
+            })?;
+
+        if !scarb_output.status.success() {
+            let stderr = String::from_utf8_lossy(&scarb_output.stderr);
+            return Err(create_smart_error(
+                &format!("Scarb build failed: {}", stderr),
+                &[
+                    "Check the Cairo contract syntax",
+                    "Ensure all dependencies are available",
+                    "Review the error message above for details",
+                ],
+            ));
+        }
+    }
+
     if !cli.quiet {
-        let cairo_verifier_path = std::path::PathBuf::from("./contracts/Verifier.cairo");
+        let cairo_verifier_path = std::path::PathBuf::from("./contracts/cairo/");
         println!(
             "{}",
             success(&format_operation_result(
@@ -1062,10 +1129,15 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
                 &garaga_timer
             ))
         );
-        summary.add_operation(&format!(
-            "Cairo verifier contract ({})",
-            util::format_file_size(&cairo_verifier_path)
-        ));
+        println!(
+            "{}",
+            success(&format!(
+                "Cairo project built successfully ({})",
+                scarb_timer.elapsed()
+            ))
+        );
+        summary.add_operation("Cairo verifier contract generated");
+        summary.add_operation("Cairo project compiled successfully");
         summary.print();
     }
 
@@ -1116,121 +1188,228 @@ fn handle_cairo_data(cli: &Cli) -> Result<()> {
     }
 
     let calldata_timer = Timer::start();
-    backends::garaga::run(&garaga_args).map_err(enhance_error_with_suggestions)?;
+    let (stdout, _stderr) =
+        backends::garaga::run_with_output(&garaga_args).map_err(enhance_error_with_suggestions)?;
+
+    // Save calldata to target/starknet/calldata.json
+    let calldata_path = std::path::PathBuf::from("./target/starknet/calldata.json");
+    std::fs::write(&calldata_path, stdout.trim()).map_err(|e| {
+        create_smart_error(
+            &format!("Failed to write calldata file: {}", e),
+            &[
+                "Check directory permissions",
+                "Ensure target/starknet directory exists",
+            ],
+        )
+    })?;
 
     if !cli.quiet {
         println!(
             "{}",
-            success(&format!(
-                "Calldata generated successfully ({})",
-                calldata_timer.elapsed()
+            success(&format_operation_result(
+                "Calldata generated",
+                &calldata_path,
+                &calldata_timer
             ))
         );
-        summary.add_operation("Calldata JSON generated for proof verification");
+        summary.add_operation(&format!(
+            "Calldata for proof verification ({})",
+            util::format_file_size(&calldata_path)
+        ));
         summary.print();
+        println!();
+        println!("🎯 Next step:");
+        println!("  • Verify on-chain: bargo cairo verify-onchain");
     }
 
     Ok(())
 }
 
 fn handle_cairo_declare(cli: &Cli, network: &str) -> Result<()> {
-    let pkg_name = get_package_name(cli)?;
+    let _pkg_name = get_package_name(cli)?;
     let mut summary = OperationSummary::new();
 
-    // Validate that Cairo project directory exists (created by garaga gen)
-    let cairo_project_path = std::path::PathBuf::from(format!("./{}", pkg_name));
+    // Load environment variables from .secrets file
+    if std::path::Path::new(".secrets").exists() {
+        if let Err(e) = dotenv::from_filename(".secrets") {
+            if cli.verbose {
+                eprintln!("Warning: Failed to load .secrets file: {}", e);
+            }
+        }
+    }
+
+    // Validate that Cairo project directory exists (created by bargo cairo gen)
+    let cairo_project_path = std::path::PathBuf::from("./contracts/cairo");
     let scarb_toml_path = cairo_project_path.join("Scarb.toml");
     if !cli.dry_run {
         util::validate_files_exist(&[scarb_toml_path]).map_err(enhance_error_with_suggestions)?;
     }
 
-    // Declare Cairo verifier contract using garaga
-    let project_str = cairo_project_path.to_string_lossy();
-    let garaga_args = vec![
+    // Set up environment variables for sncast
+    let rpc_url = if network == "mainnet" {
+        std::env::var("MAINNET_RPC_URL").map_err(|_| {
+            create_smart_error(
+                "MAINNET_RPC_URL environment variable not found",
+                &[
+                    "Add to your .secrets file: MAINNET_RPC_URL=https://starknet-mainnet.g.alchemy.com/starknet/version/rpc/v0_8/your_key",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?
+    } else {
+        std::env::var("SEPOLIA_RPC_URL").map_err(|_| {
+            create_smart_error(
+                "SEPOLIA_RPC_URL environment variable not found",
+                &[
+                    "Add to your .secrets file: SEPOLIA_RPC_URL=https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/your_key",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?
+    };
+
+    let account_address = if network == "mainnet" {
+        std::env::var("MAINNET_ACCOUNT_ADDRESS").map_err(|_| {
+            create_smart_error(
+                "MAINNET_ACCOUNT_ADDRESS environment variable not found",
+                &[
+                    "Add to your .secrets file: MAINNET_ACCOUNT_ADDRESS=0x...",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?
+    } else {
+        std::env::var("SEPOLIA_ACCOUNT_ADDRESS").map_err(|_| {
+            create_smart_error(
+                "SEPOLIA_ACCOUNT_ADDRESS environment variable not found",
+                &[
+                    "Add to your .secrets file: SEPOLIA_ACCOUNT_ADDRESS=0x...",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?
+    };
+
+    let private_key = if network == "mainnet" {
+        std::env::var("MAINNET_ACCOUNT_PRIVATE_KEY").map_err(|_| {
+            create_smart_error(
+                "MAINNET_ACCOUNT_PRIVATE_KEY environment variable not found",
+                &[
+                    "Add to your .secrets file: MAINNET_ACCOUNT_PRIVATE_KEY=0x...",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?
+    } else {
+        std::env::var("SEPOLIA_ACCOUNT_PRIVATE_KEY").map_err(|_| {
+            create_smart_error(
+                "SEPOLIA_ACCOUNT_PRIVATE_KEY environment variable not found",
+                &[
+                    "Add to your .secrets file: SEPOLIA_ACCOUNT_PRIVATE_KEY=0x...",
+                    "Ensure the .secrets file is loaded in your environment",
+                ],
+            )
+        })?
+    };
+
+    // Declare Cairo verifier contract using starkli
+    let compiled_contract_path = format!(
+        "./contracts/cairo/target/dev/cairo_UltraStarknetZKHonkVerifier.compiled_contract_class.json"
+    );
+
+    let starkli_args = vec![
         "declare",
-        "--project-path",
-        &project_str,
-        "--network",
-        network,
+        &compiled_contract_path,
+        "--rpc",
+        &rpc_url,
+        "--account",
+        &account_address,
+        "--private-key",
+        &private_key,
     ];
 
     if cli.verbose {
-        info!("Running: garaga {}", garaga_args.join(" "));
+        info!("Running: starkli {}", starkli_args.join(" "));
     }
 
     if cli.dry_run {
-        println!("Would run: garaga {}", garaga_args.join(" "));
+        println!("Would run: starkli {}", starkli_args.join(" "));
         return Ok(());
     }
 
     let declare_timer = Timer::start();
-    let (stdout, _stderr) =
-        backends::garaga::run_with_output(&garaga_args).map_err(enhance_error_with_suggestions)?;
+    let starkli_output = std::process::Command::new("starkli")
+        .args(&starkli_args)
+        .output()
+        .map_err(|e| {
+            create_smart_error(
+                &format!("Failed to run starkli declare: {}", e),
+                &[
+                    "Ensure starkli is installed and available in PATH",
+                    "Install with: curl -L https://get.starkli.sh | sh",
+                    "Check that the Cairo project was built correctly",
+                ],
+            )
+        })?;
 
-    // Check for declaration errors in garaga output
-    if stdout.contains("Error during declaration")
-        || stdout.contains("Out of gas")
-        || stdout.contains("Transaction execution error")
-    {
+    if !starkli_output.status.success() {
+        let stderr = String::from_utf8_lossy(&starkli_output.stderr);
+        let stdout = String::from_utf8_lossy(&starkli_output.stdout);
         return Err(create_smart_error(
-            "Contract declaration failed",
+            &format!("Starkli declare failed: {}{}", stdout, stderr),
             &[
-                "The garaga declare command failed with errors",
-                "Check the error output above for details",
-                "This may be due to insufficient gas, network issues, or account problems",
-                "Try running the command again or check your account funding",
+                "Check your account balance and network connectivity",
+                "Verify the contract compilation was successful",
+                "Ensure your private key and account address are correct",
             ],
         ));
     }
 
-    // Compute class hash from compiled contract
-    let compiled_contract_path = cairo_project_path.join("target/dev").join(format!(
-        "{}_UltraStarknetZKHonkVerifier.compiled_contract_class.json",
-        pkg_name
-    ));
+    let stdout = String::from_utf8_lossy(&starkli_output.stdout);
 
+    // Extract class hash from sncast output
     let mut class_hash_output = String::new();
-    if compiled_contract_path.exists() {
-        // Use starkli to compute class hash
-        let starkli_output = std::process::Command::new("starkli")
-            .args(&["class-hash", &compiled_contract_path.to_string_lossy()])
-            .output();
 
-        match starkli_output {
-            Ok(output) if output.status.success() => {
-                class_hash_output = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !cli.quiet {
-                    println!("{}", success(&format!("Class hash: {}", class_hash_output)));
-                }
+    // Parse class hash from starkli declare output
+    // starkli outputs the class hash directly as a single line
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("0x") && trimmed.len() >= 60 {
+            class_hash_output = trimmed.to_string();
+            break;
+        }
+    }
 
-                // Save class hash to file for subsequent deploy command
-                let class_hash_file = std::path::Path::new("target/starknet/.bargo_class_hash");
-                if let Some(parent) = class_hash_file.parent() {
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        if cli.verbose {
-                            eprintln!("Warning: Failed to create target directory: {}", e);
-                        }
-                    }
-                }
-                if let Err(e) = std::fs::write(class_hash_file, &class_hash_output) {
-                    if cli.verbose {
-                        eprintln!("Warning: Failed to save class hash to file: {}", e);
-                    }
-                }
+    if class_hash_output.is_empty() {
+        return Err(create_smart_error(
+            "Could not extract class hash from starkli output",
+            &[
+                "The contract declaration may have failed",
+                "Check the starkli output above for details",
+                "Try running the command again",
+            ],
+        ));
+    }
+
+    if !cli.quiet {
+        println!("{}", success(&format!("Class hash: {}", class_hash_output)));
+        // Generate voyager link
+        let voyager_link = format!("https://voyager.online/class/{}", class_hash_output);
+        println!("🔗 View on Voyager: {}", voyager_link);
+    }
+
+    // Save class hash to file for subsequent deploy command
+    let class_hash_file = std::path::Path::new("target/starknet/.bargo_class_hash");
+    if let Some(parent) = class_hash_file.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            if cli.verbose {
+                eprintln!("Warning: Failed to create target directory: {}", e);
             }
-            Ok(output) => {
-                if cli.verbose {
-                    eprintln!(
-                        "starkli failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-            }
-            Err(e) => {
-                if cli.verbose {
-                    eprintln!("Failed to run starkli: {}", e);
-                }
-            }
+        }
+    }
+    if let Err(e) = std::fs::write(class_hash_file, &class_hash_output) {
+        if cli.verbose {
+            eprintln!("Warning: Failed to save class hash to file: {}", e);
         }
     }
 
@@ -1933,7 +2112,7 @@ fn handle_evm_deploy(cli: &Cli, network: &str) -> Result<()> {
         &rpc_url,
         "--private-key",
         &private_key,
-        "src/Verifier.sol:UltraVerifier",
+        "src/Verifier.sol:HonkVerifier",
         "--root",
         "contracts/evm",
     ];
