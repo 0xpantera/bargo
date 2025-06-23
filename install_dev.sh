@@ -75,21 +75,22 @@ fi
 source .venv/bin/activate
 
 ### ===== noirup / nargo =====
+echo "🔧 Ensuring noirup (Noir tool installer)…"
+
 if ! command -v noirup >/dev/null; then
-  echo "🔧 Installing noirup…"
+  # download & run installer via our fetch helper
   fetch https://raw.githubusercontent.com/noir-lang/noirup/main/install /tmp/noirup_install
   bash /tmp/noirup_install -y
-
-  # ── make the freshly-installed noirup available *inside this script*
-  export PATH="$HOME/.local/bin:$PATH"   # adjust PATH for current process
-  hash -r                                # flush bash's command cache
-  need_path                              # persist PATH in shell rc if missing
-
-  echo "📦 Installing nargo $NARGO_VERSION"
-  noirup --version "$NARGO_VERSION"
 fi
 
-echo "📦 Installing nargo $NARGO_VERSION"
+# ── make noirup visible **inside this same script run** ─────────────
+source "$HOME/.bashrc" 2>/dev/null || true          # pull in PATH edits
+export PATH="$HOME/.local/bin:$HOME/.noirup/bin:$PATH"
+hash -r                                             # refresh bash’s hash table
+need_path                                           # persist path if still missing
+# ────────────────────────────────────────────────────────────────────
+
+echo "📦 Installing nargo $NARGO_VERSION via noirup"
 noirup --version "$NARGO_VERSION"
 
 ### ===== bbup / bb =====
