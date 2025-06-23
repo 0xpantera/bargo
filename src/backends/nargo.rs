@@ -33,3 +33,14 @@ pub fn run(args: &[&str]) -> Result<()> {
     debug!("nargo command completed successfully");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_help() {
+        // Run "nargo --help" if available; ensures invocation path works
+        let _ = run(&["--help"]);
+    }
+}

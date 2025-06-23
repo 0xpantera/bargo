@@ -33,3 +33,14 @@ pub fn run(args: &[&str]) -> Result<()> {
     debug!("bb command completed successfully");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_version() {
+        // Call bb --version if available; just ensure function doesn't panic
+        let _ = run(&["--version"]);
+    }
+}
