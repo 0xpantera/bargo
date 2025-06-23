@@ -79,7 +79,14 @@ if ! command -v noirup >/dev/null; then
   echo "🔧 Installing noirup…"
   fetch https://raw.githubusercontent.com/noir-lang/noirup/main/install /tmp/noirup_install
   bash /tmp/noirup_install -y
-  need_path
+
+  # ── make the freshly-installed noirup available *inside this script*
+  export PATH="$HOME/.local/bin:$PATH"   # adjust PATH for current process
+  hash -r                                # flush bash's command cache
+  need_path                              # persist PATH in shell rc if missing
+
+  echo "📦 Installing nargo $NARGO_VERSION"
+  noirup --version "$NARGO_VERSION"
 fi
 
 echo "📦 Installing nargo $NARGO_VERSION"
@@ -112,3 +119,38 @@ cargo build --release
 cargo install --path .
 
 echo "✅ All tooling installed. Run 'bargo doctor' to verify."
+
+#######################################################################
+#  Create .secrets for Garaga (Starknet creds)
+#######################################################################
+
+echo "🔐  Preparing .secrets file for Garaga…"
+
+SECRETS_FILE=".secrets"
+
+write_secret () {
+  local key="$1"
+  local val="$2"
+  if [ -z "$val" ]; then
+    echo "⚠️  $key is not set in the environment – please export it and re-run this block if you plan to deploy on mainnet."
+  else
+    # replace or append
+    if grep -q "^${key}=" "$SECRETS_FILE" 2>/dev/null; then
+      sed -i.bak "s#^${key}=.*#${key}=${val}#" "$SECRETS_FILE"
+    else
+      echo "${key}=${val}" >> "$SECRETS_FILE"
+    fi
+  fi
+}
+
+# touch guarantees the file exists even if all vars are missing
+touch "$SECRETS_FILE"
+
+write_secret "MAINNET_ACCOUNT_ADDRESS"      "${MAINNET_ACCOUNT_ADDRESS:-}"
+write_secret "MAINNET_ACCOUNT_PRIVATE_KEY"  "${MAINNET_ACCOUNT_PRIVATE_KEY:-}"
+write_secret "MAINNET_RPC_URL"              "${MAINNET_RPC_URL:-}"
+
+echo "🗝️  .secrets updated. Contents:"
+cat "$SECRETS_FILE"
+
+echo "✅  All tooling installed. Run 'bargo doctor' to verify."
