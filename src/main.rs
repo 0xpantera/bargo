@@ -399,10 +399,8 @@ fn handle_clean(cli: &Cli, backend: Backend) -> Result<()> {
                 if !cli.quiet {
                     println!("{}", success("Removed target/"));
                 }
-            } else {
-                if !cli.quiet {
-                    println!("{}", info("target/ already clean"));
-                }
+            } else if !cli.quiet {
+                println!("{}", info("target/ already clean"));
             }
         }
         Backend::Bb => {
@@ -416,10 +414,8 @@ fn handle_clean(cli: &Cli, backend: Backend) -> Result<()> {
                 if !cli.quiet {
                     println!("{}", success("Removed target/bb/"));
                 }
-            } else {
-                if !cli.quiet {
-                    println!("{}", info("target/bb/ already clean"));
-                }
+            } else if !cli.quiet {
+                println!("{}", info("target/bb/ already clean"));
             }
         }
         Backend::Starknet => {
@@ -433,10 +429,8 @@ fn handle_clean(cli: &Cli, backend: Backend) -> Result<()> {
                 if !cli.quiet {
                     println!("{}", success("Removed target/starknet/"));
                 }
-            } else {
-                if !cli.quiet {
-                    println!("{}", info("target/starknet/ already clean"));
-                }
+            } else if !cli.quiet {
+                println!("{}", info("target/starknet/ already clean"));
             }
         }
     }
