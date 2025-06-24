@@ -169,7 +169,7 @@ enum Backend {
     All,
 }
 
-fn main() -> Result<()> {
+pub fn run() -> Result<()> {
     // Install color-eyre for pretty error reporting
     color_eyre::install()?;
 
