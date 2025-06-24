@@ -7,7 +7,6 @@ pub mod rebuild;
 pub mod summary;
 pub mod timer;
 
-pub use backends::*;
 pub use directories::*;
 pub use error::*;
 pub use output::*;

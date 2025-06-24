@@ -7,10 +7,7 @@ pub mod colors {
     pub const RESET: &str = "\x1b[0m";
     pub const BOLD: &str = "\x1b[1m";
     pub const GREEN: &str = "\x1b[32m";
-    pub const RED: &str = "\x1b[31m";
-    pub const YELLOW: &str = "\x1b[33m";
-    pub const BLUE: &str = "\x1b[34m";
-    pub const CYAN: &str = "\x1b[36m";
+
     pub const GRAY: &str = "\x1b[90m";
     pub const BRIGHT_GREEN: &str = "\x1b[92m";
     pub const BRIGHT_BLUE: &str = "\x1b[94m";
@@ -29,16 +26,6 @@ pub fn colorize(text: &str, color: &str) -> String {
 /// Create success message with green color
 pub fn success(text: &str) -> String {
     colorize(&format!("✅ {}", text), colors::BRIGHT_GREEN)
-}
-
-/// Create error message with red color
-pub fn error(text: &str) -> String {
-    colorize(&format!("❌ {}", text), colors::RED)
-}
-
-/// Create warning message with yellow color
-pub fn warning(text: &str) -> String {
-    colorize(&format!("⚠️ {}", text), colors::YELLOW)
 }
 
 /// Create info message with blue color
