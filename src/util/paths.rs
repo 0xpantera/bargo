@@ -96,9 +96,6 @@ pub fn target_dir(flavour: Flavour) -> PathBuf {
 }
 
 /// Get the target directory path (defaults to bb backend for compatibility)
-pub fn workspace_target() -> PathBuf {
-    target_dir(Flavour::Bb)
-}
 
 /// Get the bytecode file path for a package with specific backend flavour
 pub fn get_bytecode_path(pkg_name: &str, flavour: Flavour) -> PathBuf {
