@@ -6,8 +6,10 @@ use tracing::{debug, warn};
 /// Backend flavour for artifact generation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavour {
-    /// Barretenberg backend (EVM/Solidity)
+    /// Barretenberg backend (shared base artifacts)
     Bb,
+    /// EVM backend (Keccak oracle)
+    Evm,
     /// Starknet backend (Cairo)
     Starknet,
 }
@@ -75,7 +77,9 @@ pub fn parse_package_name(nargo_toml_path: &Path) -> Result<String> {
                 .and_then(|name| name.to_str())
                 .map(|s| s.to_string())
                 .ok_or_else(|| {
-                    color_eyre::eyre::eyre!("Could not determine package name from workspace directory")
+                    color_eyre::eyre::eyre!(
+                        "Could not determine package name from workspace directory"
+                    )
                 })?;
             Ok(dir_name)
         }
@@ -86,6 +90,7 @@ pub fn parse_package_name(nargo_toml_path: &Path) -> Result<String> {
 pub fn target_dir(flavour: Flavour) -> PathBuf {
     match flavour {
         Flavour::Bb => PathBuf::from("target/bb"),
+        Flavour::Evm => PathBuf::from("target/evm"),
         Flavour::Starknet => PathBuf::from("target/starknet"),
     }
 }
@@ -145,7 +150,11 @@ pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> 
                 e
             )
         })?;
-        debug!("Moved bytecode: {} -> {}", source_bytecode.display(), dest_bytecode.display());
+        debug!(
+            "Moved bytecode: {} -> {}",
+            source_bytecode.display(),
+            dest_bytecode.display()
+        );
     }
 
     // Move witness file from target/ to target/flavour/
@@ -161,7 +170,11 @@ pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> 
                 e
             )
         })?;
-        debug!("Moved witness: {} -> {}", source_witness.display(), dest_witness.display());
+        debug!(
+            "Moved witness: {} -> {}",
+            source_witness.display(),
+            dest_witness.display()
+        );
     }
 
     Ok(())
@@ -192,7 +205,11 @@ pub fn organize_bb_artifacts(flavour: Flavour) -> Result<()> {
                 e
             )
         })?;
-        debug!("Moved proof: {} -> {}", source_proof.display(), dest_proof.display());
+        debug!(
+            "Moved proof: {} -> {}",
+            source_proof.display(),
+            dest_proof.display()
+        );
     }
 
     // Move vk file from target/ to target/flavour/

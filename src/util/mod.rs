@@ -1,16 +1,20 @@
+pub mod backends;
+pub mod directories;
+pub mod error;
+pub mod output;
 pub mod paths;
 pub mod rebuild;
-pub mod timer;
-pub mod output;
-pub mod error;
 pub mod summary;
+pub mod timer;
 
+pub use backends::*;
+pub use directories::*;
+pub use error::*;
+pub use output::*;
 pub use paths::*;
 pub use rebuild::*;
-pub use timer::*;
-pub use output::*;
-pub use error::*;
 pub use summary::*;
+pub use timer::*;
 
 #[cfg(test)]
 mod tests;
