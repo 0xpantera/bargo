@@ -3,6 +3,8 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
+use crate::util::create_smart_error;
+
 /// Backend flavour for artifact generation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavour {
@@ -95,8 +97,6 @@ pub fn target_dir(flavour: Flavour) -> PathBuf {
     }
 }
 
-/// Get the target directory path (defaults to bb backend for compatibility)
-
 /// Get the bytecode file path for a package with specific backend flavour
 pub fn get_bytecode_path(pkg_name: &str, flavour: Flavour) -> PathBuf {
     target_dir(flavour).join(format!("{}.json", pkg_name))
@@ -177,97 +177,25 @@ pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> 
     Ok(())
 }
 
-/// Organize bb artifacts by moving bb output to appropriate flavour directory
-pub fn organize_bb_artifacts(flavour: Flavour) -> Result<()> {
-    // Create the target directory for the flavour if it doesn't exist
-    let flavour_dir = target_dir(flavour);
-    std::fs::create_dir_all(&flavour_dir).map_err(|e| {
-        color_eyre::eyre::eyre!(
-            "Failed to create target directory {}: {}",
-            flavour_dir.display(),
-            e
-        )
-    })?;
-
-    // Move proof file from target/ to target/flavour/
-    let source_proof = PathBuf::from("target/proof");
-    let dest_proof = get_proof_path(flavour);
-
-    if source_proof.exists() {
-        std::fs::rename(&source_proof, &dest_proof).map_err(|e| {
-            color_eyre::eyre::eyre!(
-                "Failed to move {} to {}: {}",
-                source_proof.display(),
-                dest_proof.display(),
-                e
-            )
-        })?;
-        debug!(
-            "Moved proof: {} -> {}",
-            source_proof.display(),
-            dest_proof.display()
-        );
-    }
-
-    // Move vk file from target/ to target/flavour/
-    let source_vk = PathBuf::from("target/vk");
-    let dest_vk = get_vk_path(flavour);
-
-    if source_vk.exists() {
-        std::fs::rename(&source_vk, &dest_vk).map_err(|e| {
-            color_eyre::eyre::eyre!(
-                "Failed to move {} to {}: {}",
-                source_vk.display(),
-                dest_vk.display(),
-                e
-            )
-        })?;
-        debug!("Moved vk: {} -> {}", source_vk.display(), dest_vk.display());
-    }
-
-    // Move public_inputs file from target/ to target/flavour/
-    let source_public_inputs = PathBuf::from("target/public_inputs");
-    let dest_public_inputs = get_public_inputs_path(flavour);
-
-    if source_public_inputs.exists() {
-        std::fs::rename(&source_public_inputs, &dest_public_inputs).map_err(|e| {
-            color_eyre::eyre::eyre!(
-                "Failed to move {} to {}: {}",
-                source_public_inputs.display(),
-                dest_public_inputs.display(),
-                e
-            )
-        })?;
-        debug!(
-            "Moved public_inputs: {} -> {}",
-            source_public_inputs.display(),
-            dest_public_inputs.display()
-        );
-    }
-
-    Ok(())
-}
-
 /// Validate that required files exist for a given operation
-pub fn validate_files_exist(files: &[PathBuf]) -> Result<()> {
+pub fn validate_files_exist<P: AsRef<Path>>(files: &[P]) -> Result<()> {
     let mut missing_files = Vec::new();
 
-    for file in files {
-        if !file.exists() {
-            missing_files.push(file);
+    for file_path in files {
+        if !file_path.as_ref().exists() {
+            missing_files.push(file_path.as_ref().display().to_string());
         }
     }
 
     if !missing_files.is_empty() {
-        let missing_list = missing_files
-            .iter()
-            .map(|p| format!("  - {}", p.display()))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        return Err(color_eyre::eyre::eyre!(
-            "Required files are missing:\n{}\n\nTry running `bargo build` first.",
-            missing_list
+        return Err(create_smart_error(
+            &format!("Required files are missing: {}", missing_files.join(", ")),
+            &[
+                "Run 'bargo build' to generate bytecode and witness files",
+                "Ensure the previous workflow steps completed successfully",
+                "Check that you're running from the correct directory",
+                "Verify the package name is correct",
+            ],
         ));
     }
 
@@ -278,22 +206,32 @@ pub fn validate_files_exist(files: &[PathBuf]) -> Result<()> {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum TomlConfig {
-    Package { package: PackageMetadata },
-    Workspace { workspace: WorkspaceMetadata },
+    Package {
+        package: PackageMetadata,
+    },
+    Workspace {
+        #[allow(dead_code)]
+        workspace: WorkspaceMetadata,
+    },
 }
 
 #[derive(Debug, Deserialize)]
 struct PackageMetadata {
     name: Option<String>,
     #[serde(alias = "type")]
+    #[allow(dead_code)]
     package_type: Option<String>,
+    #[allow(dead_code)]
     version: Option<String>,
+    #[allow(dead_code)]
     authors: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct WorkspaceMetadata {
+    #[allow(dead_code)]
     members: Vec<String>,
     #[serde(alias = "default-member")]
+    #[allow(dead_code)]
     default_member: Option<String>,
 }

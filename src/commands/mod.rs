@@ -1,5 +1,4 @@
 pub mod build;
-pub mod prove;
 
 pub mod evm;
 
