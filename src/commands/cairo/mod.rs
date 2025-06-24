@@ -11,7 +11,7 @@ pub mod workflow;
 
 // Re-export main workflow functions for use by main.rs
 pub use workflow::{
-    run_data, run_declare, run_deploy, run_gen, run_prove, run_verify, run_verify_onchain,
+    run_calldata, run_declare, run_deploy, run_gen, run_prove, run_verify, run_verify_onchain,
 };
 
 // Re-export utility functions that may be needed elsewhere

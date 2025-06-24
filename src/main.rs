@@ -101,7 +101,7 @@ enum CairoCommands {
 
     /// Generate calldata for proof verification
     #[command(about = "Generate calldata JSON for latest proof")]
-    Data,
+    Calldata,
 
     /// Declare verifier contract on Starknet
     #[command(about = "Declare verifier contract on Starknet")]
@@ -234,11 +234,11 @@ fn main() -> Result<()> {
                 }
                 handle_cairo_verify(&cli)?;
             }
-            CairoCommands::Data => {
+            CairoCommands::Calldata => {
                 if !cli.quiet {
-                    print_banner("cairo data");
+                    print_banner("cairo calldata");
                 }
-                handle_cairo_data(&cli)?;
+                handle_cairo_calldata(&cli)?;
             }
             CairoCommands::Declare { network } => {
                 if !cli.quiet {
@@ -547,8 +547,8 @@ fn handle_cairo_gen(cli: &Cli) -> Result<()> {
     commands::cairo::run_gen(cli).map_err(enhance_error_with_suggestions)
 }
 
-fn handle_cairo_data(cli: &Cli) -> Result<()> {
-    commands::cairo::run_data(cli).map_err(enhance_error_with_suggestions)
+fn handle_cairo_calldata(cli: &Cli) -> Result<()> {
+    commands::cairo::run_calldata(cli).map_err(enhance_error_with_suggestions)
 }
 
 fn handle_cairo_declare(cli: &Cli, network: &str) -> Result<()> {
