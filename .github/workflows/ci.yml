@@ -1,0 +1,50 @@
+name: CI
+
+# 1. When the workflow runs
+on:
+  push: # any git push
+    branches: ["**"] # all branches
+  pull_request: # and every PR
+
+# 2. Single job called "build"
+jobs:
+  build:
+    runs-on: ubuntu-latest # GitHub-hosted Ubuntu runner
+    timeout-minutes: 20 # hard stop to avoid hanging
+
+    steps:
+      # -- Step 1: Check out code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -- Step 2: Cache Cargo downloads + build artefacts
+      #    Speeds up repeated runs dramatically
+      - name: Cache cargo registry + target/
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # -- Step 3: Install Rust (stable channel, 2024 edition ready)
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: clippy # we need clippy for linting
+
+      # -- Step 4: Build & type-check the whole workspace
+      - name: cargo check
+        run: cargo check --workspace --all-features --locked
+
+      # -- Step 5: Run clippy linter and fail on warnings
+      - name: cargo clippy (deny warnings)
+        run: cargo clippy --workspace --all-features --locked -- -D warnings
+
+      # -- Step 6: Run the test suite
+      - name: cargo test
+        run: cargo test --workspace --all-features --locked
