@@ -83,12 +83,17 @@ pub fn verify_starknet_proof(_pkg: &str) -> Result<()> {
 
     backends::bb::run(&[
         "verify",
+        "--scheme",
+        "ultra_honk",
+        "--zk",
         "-p",
         &proof_path.to_string_lossy(),
         "-k",
         &vk_path.to_string_lossy(),
-        "-j",
+        "-i",
         &public_inputs_path.to_string_lossy(),
+        "--oracle_hash",
+        "starknet",
     ])
 }
 

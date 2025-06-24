@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     backends,
-    util::{self, Flavour},
+    util::{self, Flavour, move_generated_project},
 };
 
 /// Generate calldata JSON for Starknet proof verification
@@ -96,11 +96,14 @@ pub fn generate_cairo_contract(vk_path: &Path, output_dir: Option<&str>) -> Resu
         "ultra_starknet_zk_honk",
         "--vk",
         &vk_str,
-        "--output",
-        output,
+        "--project-name",
+        "cairo_verifier",
     ];
 
-    backends::garaga::run(&garaga_args)
+    backends::garaga::run(&garaga_args)?;
+
+    // Move the generated project to the correct location
+    move_generated_project("cairo_verifier", output)
 }
 
 /// Generate Cairo verifier contract using default Starknet VK path
@@ -113,20 +116,6 @@ pub fn generate_cairo_contract(vk_path: &Path, output_dir: Option<&str>) -> Resu
 pub fn generate_cairo_contract_from_starknet_vk() -> Result<()> {
     let vk_path = util::get_vk_path(Flavour::Starknet);
     generate_cairo_contract(&vk_path, None)
-}
-
-/// Build a Cairo project using Garaga's scarb integration
-///
-/// This function builds a Cairo project using Garaga, which provides
-/// enhanced scarb functionality for proof verification contracts.
-///
-/// # Arguments
-/// * `project_path` - Path to the Cairo project directory
-///
-/// # Returns
-/// * `Result<()>` - Success or error from build process
-pub fn build_cairo_project(project_path: &str) -> Result<()> {
-    backends::garaga::run(&["build", project_path])
 }
 
 /// Validate that required Starknet artifacts exist for Garaga operations
