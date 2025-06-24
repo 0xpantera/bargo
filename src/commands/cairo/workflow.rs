@@ -122,7 +122,7 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
         summary.print();
         println!();
         println!("🎯 Next steps:");
-        println!("  • Generate calldata: bargo cairo data");
+        println!("  • Generate calldata: bargo cairo calldata");
         println!("  • Declare contract: bargo cairo declare --network <network>");
     }
 
@@ -230,14 +230,14 @@ pub fn run_verify(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-/// Run the Cairo data workflow (generate calldata)
+/// Run the Cairo calldata workflow (generate calldata)
 ///
 /// # Arguments
 /// * `cli` - CLI configuration
 ///
 /// # Returns
-/// * `Result<()>` - Success or error from workflow
-pub fn run_data(cli: &Cli) -> Result<()> {
+/// * `Result<()>` - Success or error
+pub fn run_calldata(cli: &Cli) -> Result<()> {
     let mut summary = OperationSummary::new();
 
     if !cli.dry_run {
@@ -410,7 +410,7 @@ pub fn run_verify_onchain(cli: &Cli, address: Option<&str>) -> Result<()> {
         return Err(create_smart_error(
             "Calldata file not found",
             &[
-                "Run 'bargo cairo data' first to generate calldata",
+                "Run 'bargo cairo calldata' first to generate calldata",
                 "Ensure the target/starknet/calldata.json file exists",
             ],
         ));
