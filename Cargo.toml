@@ -1,20 +1,14 @@
+[workspace]
+members = [".", "crates/bargo-core"]
+
 [package]
 name = "bargo"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
+bargo-core = { path = "crates/bargo-core" }
 color-eyre = "0.6.5"
-dotenv = "0.15"
-hex = "0.4"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.8.23"
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-atty = "0.2.14"
-which = "4.4"
 
 [dev-dependencies]
 tempfile = "3.8"

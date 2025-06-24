@@ -106,6 +106,15 @@ dependencies = [
 name = "bargo"
 version = "0.1.0"
 dependencies = [
+ "bargo-core",
+ "color-eyre",
+ "tempfile",
+]
+
+[[package]]
+name = "bargo-core"
+version = "0.1.0"
+dependencies = [
  "atty",
  "clap",
  "color-eyre",
