@@ -53,11 +53,9 @@ pub fn needs_rebuild_from_path(pkg_name: &str, start_path: &Path) -> Result<bool
 
     // Check if any source files are newer
     let src_dir = project_root.join("src");
-    if src_dir.exists() {
-        if is_dir_newer_than(&src_dir, target_time)? {
-            debug!("Source files are newer than target files, rebuild needed");
-            return Ok(true);
-        }
+    if src_dir.exists() && is_dir_newer_than(&src_dir, target_time)? {
+        debug!("Source files are newer than target files, rebuild needed");
+        return Ok(true);
     }
 
     debug!("Target files are up to date");
@@ -75,10 +73,8 @@ fn is_dir_newer_than(dir: &Path, target_time: std::time::SystemTime) -> Result<b
             if file_time > target_time {
                 return Ok(true);
             }
-        } else if path.is_dir() {
-            if is_dir_newer_than(&path, target_time)? {
-                return Ok(true);
-            }
+        } else if path.is_dir() && is_dir_newer_than(&path, target_time)? {
+            return Ok(true);
         }
     }
 
