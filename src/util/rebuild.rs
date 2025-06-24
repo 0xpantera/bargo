@@ -2,16 +2,24 @@ use color_eyre::Result;
 use std::path::Path;
 use tracing::debug;
 
-use super::{find_project_root, get_bytecode_path, get_witness_path, Flavour};
+use super::{Flavour, find_project_root, get_bytecode_path, get_witness_path};
 
 /// Check if source files are newer than target files (for smart rebuilds)
 pub fn needs_rebuild(pkg_name: &str) -> Result<bool> {
     let current_dir = std::env::current_dir()?;
-    let project_root = find_project_root(&current_dir)?;
+    needs_rebuild_from_path(pkg_name, &current_dir)
+}
 
-    // Check if target files exist
-    let bytecode_path = get_bytecode_path(pkg_name, Flavour::Bb);
-    let witness_path = get_witness_path(pkg_name, Flavour::Bb);
+/// Check if source files are newer than target files from a specific starting path
+///
+/// This version accepts a path parameter for better testability while maintaining
+/// the same rebuild detection logic.
+pub fn needs_rebuild_from_path(pkg_name: &str, start_path: &Path) -> Result<bool> {
+    let project_root = find_project_root(start_path)?;
+
+    // Check if target files exist (relative to project root)
+    let bytecode_path = project_root.join(get_bytecode_path(pkg_name, Flavour::Bb));
+    let witness_path = project_root.join(get_witness_path(pkg_name, Flavour::Bb));
 
     if !bytecode_path.exists() || !witness_path.exists() {
         debug!("Target files don't exist, rebuild needed");
@@ -29,6 +37,16 @@ pub fn needs_rebuild(pkg_name: &str) -> Result<bool> {
         let nargo_time = std::fs::metadata(&nargo_toml)?.modified()?;
         if nargo_time > target_time {
             debug!("Nargo.toml is newer than target files, rebuild needed");
+            return Ok(true);
+        }
+    }
+
+    // Check Prover.toml modification time (contains circuit inputs)
+    let prover_toml = project_root.join("Prover.toml");
+    if prover_toml.exists() {
+        let prover_time = std::fs::metadata(&prover_toml)?.modified()?;
+        if prover_time > target_time {
+            debug!("Prover.toml is newer than target files, rebuild needed");
             return Ok(true);
         }
     }
