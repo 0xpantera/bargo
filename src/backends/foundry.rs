@@ -61,25 +61,6 @@ pub fn run_forge(args: &[&str]) -> Result<()> {
     })
 }
 
-/// Execute a cast command with the given arguments
-pub fn run_cast(args: &[&str]) -> Result<()> {
-    // Ensure Foundry is available before running
-    ensure_available()?;
-
-    // Use the common spawn_cmd function from the parent module
-    super::spawn_cmd("cast", args).map_err(|e| {
-        color_eyre::eyre::eyre!(
-            "{}\n\n\
-             Troubleshooting:\n\
-             • Ensure Foundry is properly installed: foundryup\n\
-             • Check that cast is in your PATH\n\
-             • Verify .env file has required variables (RPC_URL, PRIVATE_KEY)\n\
-             • Try running the cast command directly to see more details",
-            e
-        )
-    })
-}
-
 /// Execute a forge command and capture its output
 pub fn run_forge_with_output(args: &[&str]) -> Result<(String, String)> {
     // Ensure Foundry is available before running
@@ -106,41 +87,6 @@ pub fn run_forge_with_output(args: &[&str]) -> Result<(String, String)> {
     if !output.status.success() {
         return Err(color_eyre::eyre::eyre!(
             "Forge command failed with exit code: {}\nStdout: {}\nStderr: {}",
-            output.status.code().unwrap_or(-1),
-            stdout,
-            stderr
-        ));
-    }
-
-    Ok((stdout, stderr))
-}
-
-/// Execute a cast command and capture its output
-pub fn run_cast_with_output(args: &[&str]) -> Result<(String, String)> {
-    // Ensure Foundry is available before running
-    ensure_available()?;
-
-    let output = std::process::Command::new("cast")
-        .args(args)
-        .output()
-        .map_err(|e| {
-            color_eyre::eyre::eyre!(
-                "Failed to execute cast command: {}\n\n\
-                 Troubleshooting:\n\
-                 • Ensure Foundry is properly installed: foundryup\n\
-                 • Check that cast is in your PATH\n\
-                 • Verify .env file has required variables (RPC_URL, PRIVATE_KEY)\n\
-                 • Try running the cast command directly to see more details",
-                e
-            )
-        })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!(
-            "Cast command failed with exit code: {}\nStdout: {}\nStderr: {}",
             output.status.code().unwrap_or(-1),
             stdout,
             stderr
