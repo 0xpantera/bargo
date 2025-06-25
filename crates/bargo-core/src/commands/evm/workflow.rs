@@ -48,11 +48,6 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         directories::validate_evm_directory_structure().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cfg.dry_run {
-        print_dry_run_commands(&pkg_name)?;
-        return Ok(());
-    }
-
     let mut summary = OperationSummary::new();
 
     // Step 1: Initialize Foundry project
@@ -60,7 +55,13 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         info!("Initializing Foundry project");
     }
     let foundry_timer = Timer::start();
-    foundry::init_default_foundry_project().map_err(enhance_error_with_suggestions)?;
+
+    // TODO: Migrate foundry to runner abstraction in next checkpoint
+    if cfg.dry_run {
+        println!("Would run: forge init --force contracts/evm");
+    } else {
+        foundry::init_default_foundry_project().map_err(enhance_error_with_suggestions)?;
+    }
 
     if !cfg.quiet {
         let foundry_dir = directories::get_evm_contracts_dir();
@@ -80,7 +81,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         info!("Generating EVM proof with keccak oracle");
     }
     let proof_timer = Timer::start();
-    bb_operations::generate_evm_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::generate_evm_proof(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Evm);
@@ -103,7 +104,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         info!("Generating EVM verification key");
     }
     let vk_timer = Timer::start();
-    bb_operations::generate_evm_vk(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::generate_evm_vk(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let vk_path = util::get_vk_path(Flavour::Evm);
@@ -127,7 +128,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
     }
     let contract_timer = Timer::start();
     let verifier_path = directories::get_verifier_contract_path();
-    bb_operations::write_solidity_verifier_from_evm_vk(&verifier_path.to_string_lossy())
+    bb_operations::write_solidity_verifier_from_evm_vk(cfg, &verifier_path.to_string_lossy())
         .map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
@@ -175,20 +176,9 @@ pub fn run_prove(cfg: &Config) -> Result<()> {
         directories::ensure_evm_target_dir().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cfg.dry_run {
-        println!(
-            "Would run: bb prove -b ./target/bb/{}.json -w ./target/bb/{}.gz -o ./target/evm/ --oracle_hash keccak --output_format bytes_and_fields",
-            pkg_name, pkg_name
-        );
-        println!(
-            "Would run: bb write_vk --oracle_hash keccak -b ./target/bb/{}.json -o ./target/evm/",
-            pkg_name
-        );
-        return Ok(());
-    }
-
     let timer = Timer::start();
-    bb_operations::generate_evm_proof_and_vk(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::generate_evm_proof_and_vk(cfg, &pkg_name)
+        .map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Evm);
@@ -224,15 +214,8 @@ pub fn run_verify(cfg: &Config) -> Result<()> {
         bb_operations::validate_evm_artifacts().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cfg.dry_run {
-        println!(
-            "Would run: bb verify -p ./target/evm/proof -k ./target/evm/vk -j ./target/evm/public_inputs"
-        );
-        return Ok(());
-    }
-
     let timer = Timer::start();
-    bb_operations::verify_evm_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::verify_evm_proof(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         println!(
@@ -501,37 +484,6 @@ pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
         ));
         summary.print();
     }
-
-    Ok(())
-}
-
-/// Print dry-run commands for EVM gen workflow
-///
-/// # Arguments
-/// * `pkg` - Package name
-///
-/// # Returns
-/// * `Result<()>` - Success or error
-pub fn print_dry_run_commands(pkg: &str) -> Result<()> {
-    println!("Would run the following commands:");
-    println!();
-    println!("# Initialize Foundry project");
-    println!("forge init --force contracts/evm");
-    println!();
-    println!("# Generate EVM proof with keccak oracle");
-    println!(
-        "bb prove -b ./target/bb/{}.json -w ./target/bb/{}.gz -o ./target/evm/ --oracle_hash keccak --output_format bytes_and_fields",
-        pkg, pkg
-    );
-    println!();
-    println!("# Generate EVM verification key");
-    println!(
-        "bb write_vk --oracle_hash keccak -b ./target/bb/{}.json -o ./target/evm/",
-        pkg
-    );
-    println!();
-    println!("# Generate Solidity verifier contract");
-    println!("bb write_solidity_verifier -k ./target/evm/vk -o contracts/evm/src/Verifier.sol");
 
     Ok(())
 }

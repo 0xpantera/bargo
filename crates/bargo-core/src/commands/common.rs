@@ -67,8 +67,41 @@ pub fn run_nargo_command(cfg: &Config, base_args: &[&str]) -> Result<()> {
 
     // TODO: Migrate remaining shell-outs to use runner abstraction:
     // - backends::nargo::run calls in other modules
-    // - bb command executions
     // - scarb command executions
     // - garaga command executions
     // - starknet CLI integrations
+}
+
+/// Run a bb command with consolidated argument building, logging, and dry-run handling
+///
+/// This is the primary helper for executing bb commands consistently across all
+/// command modules. It handles:
+/// - Verbose logging (when enabled and not quiet)
+/// - Dry-run mode (prints command without executing)
+/// - Command execution via the configured runner
+///
+/// # Arguments
+/// * `cfg` - The global configuration containing all flags and runner
+/// * `args` - Arguments to pass to bb
+///
+/// # Returns
+/// * `Result<()>` - Success or error from command execution
+///
+/// # Example
+/// ```ignore
+/// // Execute "bb prove --scheme ultra_honk -b bytecode.json -w witness.gz"
+/// run_bb_command(&config, &["prove", "--scheme", "ultra_honk", "-b", "bytecode.json", "-w", "witness.gz"])?;
+/// ```
+pub fn run_bb_command(cfg: &Config, args: &[&str]) -> Result<()> {
+    let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+    if cfg.verbose && !cfg.quiet {
+        info!("Running: bb {}", args_vec.join(" "));
+    }
+
+    // Create command specification for bb
+    let spec = CmdSpec::new("bb".to_string(), args_vec);
+
+    // Use the runner to execute the command (handles dry-run automatically)
+    cfg.runner.run(&spec)
 }

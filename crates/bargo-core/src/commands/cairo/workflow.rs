@@ -48,11 +48,6 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
             .map_err(enhance_error_with_suggestions)?;
     }
 
-    if cfg.dry_run {
-        print_dry_run_commands(&pkg_name)?;
-        return Ok(());
-    }
-
     let mut summary = OperationSummary::new();
 
     // Step 1: Generate Starknet proof
@@ -60,7 +55,8 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         info!("Generating Starknet proof");
     }
     let proof_timer = Timer::start();
-    bb_operations::generate_starknet_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::generate_starknet_proof(cfg, &pkg_name)
+        .map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Starknet);
@@ -83,7 +79,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         info!("Generating Starknet verification key");
     }
     let vk_timer = Timer::start();
-    bb_operations::generate_starknet_vk(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::generate_starknet_vk(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let vk_path = util::get_vk_path(Flavour::Starknet);
@@ -106,7 +102,16 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         info!("Generating Cairo verifier contract");
     }
     let contract_timer = Timer::start();
-    garaga::generate_cairo_contract_from_starknet_vk().map_err(enhance_error_with_suggestions)?;
+
+    // TODO: Migrate garaga to runner abstraction in next checkpoint
+    if cfg.dry_run {
+        println!(
+            "Would run: garaga gen --system ultra_starknet_zk_honk --vk ./target/starknet/vk --output ./contracts/cairo/"
+        );
+    } else {
+        garaga::generate_cairo_contract_from_starknet_vk()
+            .map_err(enhance_error_with_suggestions)?;
+    }
 
     if !cfg.quiet {
         let cairo_dir = directories::get_cairo_contracts_dir();
@@ -151,20 +156,8 @@ pub fn run_prove(cfg: &Config) -> Result<()> {
         directories::ensure_starknet_target_dir().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cfg.dry_run {
-        println!(
-            "Would run: bb prove --scheme ultra_honk --oracle_hash starknet --zk -b ./target/bb/{}.json -w ./target/bb/{}.gz -o ./target/starknet/",
-            pkg_name, pkg_name
-        );
-        println!(
-            "Would run: bb write_vk --oracle_hash starknet -b ./target/bb/{}.json -o ./target/starknet/",
-            pkg_name
-        );
-        return Ok(());
-    }
-
     let timer = Timer::start();
-    bb_operations::generate_starknet_proof_and_vk(&pkg_name)
+    bb_operations::generate_starknet_proof_and_vk(cfg, &pkg_name)
         .map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
@@ -207,15 +200,8 @@ pub fn run_verify(cfg: &Config) -> Result<()> {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
-    if cfg.dry_run {
-        println!(
-            "Would run: bb verify -p ./target/starknet/proof -k ./target/starknet/vk -j ./target/starknet/public_inputs"
-        );
-        return Ok(());
-    }
-
     let timer = Timer::start();
-    bb_operations::verify_starknet_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
+    bb_operations::verify_starknet_proof(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         println!(
@@ -440,36 +426,6 @@ pub fn run_verify_onchain(cfg: &Config, address: Option<&str>) -> Result<()> {
     println!("🚧 On-chain verification functionality coming soon");
     println!("Contract address: {}", contract_address);
     println!("Calldata: {}", calldata_path.display());
-
-    Ok(())
-}
-
-/// Print dry-run commands for Cairo gen workflow
-///
-/// # Arguments
-/// * `pkg` - Package name
-///
-/// # Returns
-/// * `Result<()>` - Success or error
-pub fn print_dry_run_commands(pkg: &str) -> Result<()> {
-    println!("Would run the following commands:");
-    println!();
-    println!("# Generate Starknet proof");
-    println!(
-        "bb prove --scheme ultra_honk --oracle_hash starknet --zk -b ./target/bb/{}.json -w ./target/bb/{}.gz -o ./target/starknet/",
-        pkg, pkg
-    );
-    println!();
-    println!("# Generate Starknet verification key");
-    println!(
-        "bb write_vk --oracle_hash starknet -b ./target/bb/{}.json -o ./target/starknet/",
-        pkg
-    );
-    println!();
-    println!("# Generate Cairo verifier contract");
-    println!(
-        "garaga gen --system ultra_starknet_zk_honk --vk ./target/starknet/vk --output ./contracts/cairo/"
-    );
 
     Ok(())
 }
