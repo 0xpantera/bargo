@@ -4,11 +4,9 @@
 //! (Cairo/Starknet and EVM/Ethereum), allowing them to be used interchangeably
 //! through trait objects or concrete types.
 
-use std::any::Any;
-
 use color_eyre::Result;
 
-use crate::config::Config;
+use crate::config::{CairoDeployConfig, Config};
 
 /// Trait for polymorphic backend implementations (Cairo, EVM, etc.)
 ///
@@ -37,8 +35,15 @@ pub trait Backend {
     /// Verify proof on-chain using deployed verifier
     fn verify_onchain(&mut self, cfg: &Config, address: Option<&str>) -> Result<()>;
 
-    /// Downcast to concrete backend type for type-specific operations
-    fn as_any_mut(&mut self) -> &mut dyn Any;
+    /// Configure backend with backend-specific settings
+    fn configure(&mut self, config: BackendConfig) -> Result<()>;
+}
+
+/// Backend configuration for backend-specific settings
+#[derive(Debug, Clone)]
+pub enum BackendConfig {
+    /// Cairo/Starknet backend configuration
+    CairoDeploy(CairoDeployConfig),
 }
 
 /// Backend type identifier for factory function

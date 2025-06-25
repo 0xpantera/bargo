@@ -11,7 +11,7 @@ pub mod commands;
 pub mod config;
 pub mod runner;
 
-use backend::{BackendKind, backend_for};
+use backend::{BackendConfig, BackendKind, backend_for};
 use config::CairoDeployConfig;
 
 pub use cli::Cli;
@@ -99,12 +99,7 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 let mut backend = backend_for(BackendKind::Cairo);
                 backend.calldata(cfg)
             }
-            CairoCommands::Declare { network } => {
-                if !cfg.quiet {
-                    print_banner("cairo declare");
-                }
-                commands::cairo::run_declare(cfg, network)
-            }
+
             CairoCommands::Deploy {
                 class_hash,
                 auto_declare,
@@ -115,15 +110,10 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 }
                 let mut backend = backend_for(BackendKind::Cairo);
 
-                // Downcast to CairoBackend to set deploy configuration
-                if let Some(cairo_backend) = backend
-                    .as_any_mut()
-                    .downcast_mut::<commands::cairo::backend::CairoBackend>(
-                ) {
-                    let deploy_config =
-                        CairoDeployConfig::new(class_hash.clone(), *auto_declare, *no_declare);
-                    cairo_backend.set_deploy_config(deploy_config);
-                }
+                // Configure the backend with deploy-specific settings
+                let deploy_config =
+                    CairoDeployConfig::new(class_hash.clone(), *auto_declare, *no_declare);
+                backend.configure(BackendConfig::CairoDeploy(deploy_config))?;
 
                 backend.deploy(cfg, None)
             }

@@ -92,16 +92,6 @@ pub enum CairoCommands {
     #[command(about = "Generate calldata JSON for latest proof")]
     Calldata,
 
-    /// Declare verifier contract on Starknet
-    #[command(
-        about = "Declare verifier contract on Starknet (DEPRECATED: use 'cairo deploy' with auto-declare instead)"
-    )]
-    Declare {
-        /// Network to declare on (sepolia or mainnet)
-        #[arg(long, default_value = "sepolia")]
-        network: String,
-    },
-
     /// Deploy declared verifier contract
     #[command(about = "Deploy declared verifier contract")]
     Deploy {
