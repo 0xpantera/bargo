@@ -2,6 +2,7 @@ use color_eyre::Result;
 use std::process::Command;
 use tracing::{debug, error};
 
+#[allow(dead_code)] // TODO: Remove in checkpoint B when all bb calls migrated to runner
 pub fn run(args: &[&str]) -> Result<()> {
     debug!("Executing bb with args: {:?}", args);
 

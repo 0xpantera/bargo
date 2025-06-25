@@ -152,16 +152,17 @@ fn trait_system_generates_expected_output() {
         .unwrap()
         .args(["--dry-run", "--pkg", "test_pkg", "cairo", "gen"])
         .assert()
-        .stdout(contains("Would run the following commands:"))
-        .stdout(contains("Generate Starknet proof"));
+        .stdout(contains("Would run: bb prove"))
+        .stdout(contains("Would run: bb write_vk"))
+        .stdout(contains("Would run: garaga gen"));
 
     // Verify that EVM gen through trait system produces expected dry-run output
     Command::cargo_bin("bargo")
         .unwrap()
         .args(["--dry-run", "--pkg", "test_pkg", "evm", "gen"])
         .assert()
-        .stdout(contains("Would run the following commands:"))
-        .stdout(contains("Generate EVM proof"));
+        .stdout(contains("Would run: bb prove"))
+        .stdout(contains("Would run: bb write_vk"));
 }
 
 #[test]
