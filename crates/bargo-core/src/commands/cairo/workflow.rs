@@ -7,7 +7,7 @@ use color_eyre::Result;
 use tracing::info;
 
 use crate::{
-    Cli,
+    config::Config,
     util::{
         self, Flavour, OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions,
         format_operation_result, success,
@@ -28,11 +28,11 @@ use super::{bb_operations, directories, garaga, load_env_vars};
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_gen(cli: &Cli) -> Result<()> {
-    let pkg_name = util::get_package_name(cli.pkg.as_ref())?;
+pub fn run_gen(cfg: &Config) -> Result<()> {
+    let pkg_name = util::get_package_name(cfg.pkg.as_ref())?;
     load_env_vars();
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Starting Cairo verifier generation workflow");
     }
 
@@ -42,13 +42,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
         util::get_witness_path(&pkg_name, Flavour::Bb),
     ];
 
-    if !cli.dry_run {
+    if !cfg.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
         directories::validate_cairo_directory_structure()
             .map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         print_dry_run_commands(&pkg_name)?;
         return Ok(());
     }
@@ -56,13 +56,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     let mut summary = OperationSummary::new();
 
     // Step 1: Generate Starknet proof
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating Starknet proof");
     }
     let proof_timer = Timer::start();
     bb_operations::generate_starknet_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Starknet);
         println!(
             "{}",
@@ -79,13 +79,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     }
 
     // Step 2: Generate Starknet VK
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating Starknet verification key");
     }
     let vk_timer = Timer::start();
     bb_operations::generate_starknet_vk(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let vk_path = util::get_vk_path(Flavour::Starknet);
         println!(
             "{}",
@@ -102,13 +102,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     }
 
     // Step 3: Generate Cairo verifier contract
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating Cairo verifier contract");
     }
     let contract_timer = Timer::start();
     garaga::generate_cairo_contract_from_starknet_vk().map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let cairo_dir = directories::get_cairo_contracts_dir();
         println!(
             "{}",
@@ -136,9 +136,9 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_prove(cli: &Cli) -> Result<()> {
+pub fn run_prove(cfg: &Config) -> Result<()> {
     let pkg_name =
-        util::get_package_name(cli.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
+        util::get_package_name(cfg.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
 
     // Validate that required build files exist
     let required_files = vec![
@@ -146,12 +146,12 @@ pub fn run_prove(cli: &Cli) -> Result<()> {
         util::get_witness_path(&pkg_name, Flavour::Bb),
     ];
 
-    if !cli.dry_run {
+    if !cfg.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
         directories::ensure_starknet_target_dir().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!(
             "Would run: bb prove --scheme ultra_honk --oracle_hash starknet --zk -b ./target/bb/{}.json -w ./target/bb/{}.gz -o ./target/starknet/",
             pkg_name, pkg_name
@@ -167,7 +167,7 @@ pub fn run_prove(cli: &Cli) -> Result<()> {
     bb_operations::generate_starknet_proof_and_vk(&pkg_name)
         .map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Starknet);
         let vk_path = util::get_vk_path(Flavour::Starknet);
         println!(
@@ -192,9 +192,9 @@ pub fn run_prove(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_verify(cli: &Cli) -> Result<()> {
+pub fn run_verify(cfg: &Config) -> Result<()> {
     let pkg_name =
-        util::get_package_name(cli.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
+        util::get_package_name(cfg.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
 
     // Validate that required Starknet artifacts exist
     let required_files = vec![
@@ -203,11 +203,11 @@ pub fn run_verify(cli: &Cli) -> Result<()> {
         util::get_public_inputs_path(Flavour::Starknet),
     ];
 
-    if !cli.dry_run {
+    if !cfg.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!(
             "Would run: bb verify -p ./target/starknet/proof -k ./target/starknet/vk -j ./target/starknet/public_inputs"
         );
@@ -217,7 +217,7 @@ pub fn run_verify(cli: &Cli) -> Result<()> {
     let timer = Timer::start();
     bb_operations::verify_starknet_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         println!(
             "{}",
             success(&format!(
@@ -237,14 +237,14 @@ pub fn run_verify(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error
-pub fn run_calldata(cli: &Cli) -> Result<()> {
+pub fn run_calldata(cfg: &Config) -> Result<()> {
     let mut summary = OperationSummary::new();
 
-    if !cli.dry_run {
+    if !cfg.dry_run {
         garaga::validate_starknet_artifacts().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         let proof_path = util::get_proof_path(Flavour::Starknet);
         let vk_path = util::get_vk_path(Flavour::Starknet);
         let public_inputs_path = util::get_public_inputs_path(Flavour::Starknet);
@@ -257,7 +257,7 @@ pub fn run_calldata(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating calldata for Starknet proof verification");
     }
 
@@ -265,7 +265,7 @@ pub fn run_calldata(cli: &Cli) -> Result<()> {
     let calldata_path = garaga::generate_calldata_from_starknet_artifacts()
         .map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         println!(
             "{}",
             success(&format_operation_result(
@@ -295,7 +295,7 @@ pub fn run_calldata(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_declare(cli: &Cli, network: &str) -> Result<()> {
+pub fn run_declare(cfg: &Config, network: &str) -> Result<()> {
     load_env_vars();
 
     let cairo_dir = directories::get_cairo_contracts_dir();
@@ -309,12 +309,12 @@ pub fn run_declare(cli: &Cli, network: &str) -> Result<()> {
         ));
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!("Would declare contract on network: {}", network);
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Declaring Cairo verifier contract on {}", network);
     }
 
@@ -335,7 +335,7 @@ pub fn run_declare(cli: &Cli, network: &str) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
+pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
     load_env_vars();
 
     let hash = match class_hash {
@@ -357,12 +357,12 @@ pub fn run_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
         }
     };
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!("Would deploy contract with class hash: {}", hash);
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Deploying Cairo verifier contract");
     }
 
@@ -382,7 +382,7 @@ pub fn run_deploy(cli: &Cli, class_hash: Option<&str>) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_verify_onchain(cli: &Cli, address: Option<&str>) -> Result<()> {
+pub fn run_verify_onchain(cfg: &Config, address: Option<&str>) -> Result<()> {
     load_env_vars();
 
     let contract_address = match address {
@@ -406,7 +406,7 @@ pub fn run_verify_onchain(cli: &Cli, address: Option<&str>) -> Result<()> {
 
     // Validate calldata exists
     let calldata_path = std::path::PathBuf::from("./target/starknet/calldata.json");
-    if !cli.dry_run && !calldata_path.exists() {
+    if !cfg.dry_run && !calldata_path.exists() {
         return Err(create_smart_error(
             "Calldata file not found",
             &[
@@ -416,7 +416,7 @@ pub fn run_verify_onchain(cli: &Cli, address: Option<&str>) -> Result<()> {
         ));
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!(
             "Would verify proof on-chain at address: {}",
             contract_address
@@ -424,7 +424,7 @@ pub fn run_verify_onchain(cli: &Cli, address: Option<&str>) -> Result<()> {
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Verifying proof on-chain at address: {}", contract_address);
     }
 
