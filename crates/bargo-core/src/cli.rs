@@ -93,7 +93,9 @@ pub enum CairoCommands {
     Calldata,
 
     /// Declare verifier contract on Starknet
-    #[command(about = "Declare verifier contract on Starknet")]
+    #[command(
+        about = "Declare verifier contract on Starknet (DEPRECATED: use 'cairo deploy' with auto-declare instead)"
+    )]
     Declare {
         /// Network to declare on (sepolia or mainnet)
         #[arg(long, default_value = "sepolia")]
@@ -106,6 +108,12 @@ pub enum CairoCommands {
         /// Class hash of the declared contract
         #[arg(long)]
         class_hash: Option<String>,
+        /// Automatically declare contract if not already declared (default: true)
+        #[arg(long, default_value = "true")]
+        auto_declare: bool,
+        /// Skip automatic declaration (fails if contract not declared)
+        #[arg(long, conflicts_with = "auto_declare")]
+        no_declare: bool,
     },
 
     /// Verify proof on-chain
