@@ -5,7 +5,7 @@
 
 use color_eyre::Result;
 
-use crate::backends;
+use crate::{backends, commands::common, config::Config};
 
 /// Initialize a new Foundry project
 ///
@@ -13,12 +13,13 @@ use crate::backends;
 /// configuration files and directories.
 ///
 /// # Arguments
+/// * `cfg` - Configuration containing runner and flags
 /// * `project_path` - Path where the Foundry project should be created
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from Foundry initialization
-pub fn init_foundry_project(project_path: &str) -> Result<()> {
-    backends::foundry::run_forge(&["init", "--force", project_path])
+pub fn init_foundry_project(cfg: &Config, project_path: &str) -> Result<()> {
+    common::run_foundry_command(cfg, "forge", &["init", "--force", project_path])
 }
 
 /// Initialize Foundry project at the default EVM contracts location
@@ -26,10 +27,13 @@ pub fn init_foundry_project(project_path: &str) -> Result<()> {
 /// Convenience function that initializes a Foundry project at the standard
 /// location used by the Bargo workflow.
 ///
+/// # Arguments
+/// * `cfg` - Configuration containing runner and flags
+///
 /// # Returns
 /// * `Result<()>` - Success or error from initialization
-pub fn init_default_foundry_project() -> Result<()> {
-    init_foundry_project("contracts/evm")
+pub fn init_default_foundry_project(cfg: &Config) -> Result<()> {
+    init_foundry_project(cfg, "contracts/evm")
 }
 
 /// Deploy a contract using Foundry
@@ -37,6 +41,7 @@ pub fn init_default_foundry_project() -> Result<()> {
 /// This function deploys a contract to an EVM network using forge create.
 ///
 /// # Arguments
+/// * `cfg` - Configuration containing runner and flags
 /// * `contract_path` - Path to the contract source file
 /// * `contract_name` - Name of the contract to deploy
 /// * `rpc_url` - RPC URL for the target network
@@ -46,6 +51,7 @@ pub fn init_default_foundry_project() -> Result<()> {
 /// # Returns
 /// * `Result<String>` - Contract address or error
 pub fn deploy_contract(
+    _cfg: &Config,
     contract_path: &str,
     _contract_name: &str,
     rpc_url: &str,
@@ -66,6 +72,8 @@ pub fn deploy_contract(
         args.extend(constructor_args);
     }
 
+    // TODO: Extend runner interface to capture stdout for contract address parsing
+    // For now, fall back to direct backend call
     let (stdout, _stderr) = backends::foundry::run_forge_with_output(&args)?;
 
     // Parse contract address from forge output
@@ -89,13 +97,15 @@ pub fn deploy_contract(
 /// standard EVM contracts directory.
 ///
 /// # Arguments
+/// * `cfg` - Configuration containing runner and flags
 /// * `rpc_url` - RPC URL for the target network
 /// * `private_key` - Private key for deployment
 ///
 /// # Returns
 /// * `Result<String>` - Contract address or error
-pub fn deploy_verifier_contract(rpc_url: &str, private_key: &str) -> Result<String> {
+pub fn deploy_verifier_contract(cfg: &Config, rpc_url: &str, private_key: &str) -> Result<String> {
     deploy_contract(
+        cfg,
         "contracts/evm/src/Verifier.sol:Verifier",
         "Verifier",
         rpc_url,
