@@ -298,6 +298,11 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
 pub fn run_declare(cfg: &Config, network: &str) -> Result<()> {
     load_env_vars();
 
+    if cfg.dry_run {
+        println!("Would declare contract on network: {}", network);
+        return Ok(());
+    }
+
     let cairo_dir = directories::get_cairo_contracts_dir();
     if !cairo_dir.exists() {
         return Err(create_smart_error(
@@ -307,11 +312,6 @@ pub fn run_declare(cfg: &Config, network: &str) -> Result<()> {
                 "Ensure the contracts/cairo directory exists",
             ],
         ));
-    }
-
-    if cfg.dry_run {
-        println!("Would declare contract on network: {}", network);
-        return Ok(());
     }
 
     if cfg.verbose {
@@ -338,6 +338,15 @@ pub fn run_declare(cfg: &Config, network: &str) -> Result<()> {
 pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
     load_env_vars();
 
+    if cfg.dry_run {
+        let hash = match class_hash {
+            Some(hash) => hash.to_string(),
+            None => "<class_hash_from_declare>".to_string(), // Placeholder for dry-run
+        };
+        println!("Would deploy contract with class hash: {}", hash);
+        return Ok(());
+    }
+
     let hash = match class_hash {
         Some(hash) => hash.to_string(),
         None => {
@@ -356,11 +365,6 @@ pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
             }
         }
     };
-
-    if cfg.dry_run {
-        println!("Would deploy contract with class hash: {}", hash);
-        return Ok(());
-    }
 
     if cfg.verbose {
         info!("Deploying Cairo verifier contract");
