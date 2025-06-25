@@ -42,25 +42,6 @@ pub fn ensure_available() -> Result<()> {
     Ok(())
 }
 
-/// Execute a forge command with the given arguments
-pub fn run_forge(args: &[&str]) -> Result<()> {
-    // Ensure Foundry is available before running
-    ensure_available()?;
-
-    // Use the common spawn_cmd function from the parent module
-    super::spawn_cmd("forge", args).map_err(|e| {
-        color_eyre::eyre::eyre!(
-            "{}\n\n\
-             Troubleshooting:\n\
-             • Ensure Foundry is properly installed: foundryup\n\
-             • Check that forge is in your PATH\n\
-             • Verify .env file has required variables (RPC_URL, PRIVATE_KEY)\n\
-             • Try running the forge command directly to see more details",
-            e
-        )
-    })
-}
-
 /// Execute a forge command and capture its output
 pub fn run_forge_with_output(args: &[&str]) -> Result<(String, String)> {
     // Ensure Foundry is available before running

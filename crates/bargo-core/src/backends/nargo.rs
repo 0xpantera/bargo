@@ -1,46 +1,22 @@
-use color_eyre::Result;
-use std::process::Command;
-use tracing::{debug, error};
+//! Nargo operations have been migrated to the runner abstraction
+//!
+//! All nargo command executions now use the runner system through
+//! `commands::common::run_nargo_command()` which provides:
+//! - Unified dry-run handling
+//! - Consistent logging
+//! - Testable command execution
+//! - Global flag propagation (--pkg, --verbose, etc.)
+//!
+//! The legacy `run()` function has been removed. Use the runner-based
+//! approach in common commands instead.
 
-pub fn run(args: &[&str]) -> Result<()> {
-    debug!("Executing nargo with args: {:?}", args);
-
-    let mut cmd = Command::new("nargo");
-    cmd.args(args);
-
-    let output = cmd.output()?;
-
-    // Print stdout and stderr
-    if !output.stdout.is_empty() {
-        print!("{}", String::from_utf8_lossy(&output.stdout));
-    }
-
-    if !output.stderr.is_empty() {
-        eprint!("{}", String::from_utf8_lossy(&output.stderr));
-    }
-
-    // Check if command was successful
-    if !output.status.success() {
-        let exit_code = output.status.code().unwrap_or(-1);
-        error!("nargo command failed with exit code: {}", exit_code);
-        return Err(color_eyre::eyre::eyre!(
-            "nargo {} failed with exit code {}",
-            args.join(" "),
-            exit_code
-        ));
-    }
-
-    debug!("nargo command completed successfully");
-    Ok(())
-}
+// This module is kept for module structure compatibility
+// All nargo functionality has moved to:
+// - commands::common::run_nargo_command() for execution
+// - commands::common::build_nargo_args() for argument building
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn test_run_help() {
-        // Run "nargo --help" if available; ensures invocation path works
-        let _ = run(&["--help"]);
-    }
+    // Tests for nargo functionality should use the runner-based commands
+    // See tests/cli_smoke.rs for examples of testing nargo commands through the CLI
 }
