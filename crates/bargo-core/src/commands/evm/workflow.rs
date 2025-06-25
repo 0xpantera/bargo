@@ -7,7 +7,7 @@ use color_eyre::Result;
 use tracing::info;
 
 use crate::{
-    Cli,
+    config::Config,
     util::{
         self, Flavour, OperationSummary, Timer, create_smart_error, enhance_error_with_suggestions,
         format_operation_result, success,
@@ -29,11 +29,11 @@ use super::{bb_operations, directories, foundry, load_env_vars};
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_gen(cli: &Cli) -> Result<()> {
-    let pkg_name = util::get_package_name(cli.pkg.as_ref())?;
+pub fn run_gen(cfg: &Config) -> Result<()> {
+    let pkg_name = util::get_package_name(cfg.pkg.as_ref())?;
     load_env_vars();
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Starting EVM verifier generation workflow");
     }
 
@@ -43,12 +43,12 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
         util::get_witness_path(&pkg_name, Flavour::Bb),
     ];
 
-    if !cli.dry_run {
+    if !cfg.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
         directories::validate_evm_directory_structure().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         print_dry_run_commands(&pkg_name)?;
         return Ok(());
     }
@@ -56,13 +56,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     let mut summary = OperationSummary::new();
 
     // Step 1: Initialize Foundry project
-    if cli.verbose {
+    if cfg.verbose {
         info!("Initializing Foundry project");
     }
     let foundry_timer = Timer::start();
     foundry::init_default_foundry_project().map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let foundry_dir = directories::get_evm_contracts_dir();
         println!(
             "{}",
@@ -76,13 +76,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     }
 
     // Step 2: Generate EVM proof
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating EVM proof with keccak oracle");
     }
     let proof_timer = Timer::start();
     bb_operations::generate_evm_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Evm);
         println!(
             "{}",
@@ -99,13 +99,13 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     }
 
     // Step 3: Generate EVM VK
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating EVM verification key");
     }
     let vk_timer = Timer::start();
     bb_operations::generate_evm_vk(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let vk_path = util::get_vk_path(Flavour::Evm);
         println!(
             "{}",
@@ -122,7 +122,7 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     }
 
     // Step 4: Generate Solidity verifier contract
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating Solidity verifier contract");
     }
     let contract_timer = Timer::start();
@@ -130,7 +130,7 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
     bb_operations::write_solidity_verifier_from_evm_vk(&verifier_path.to_string_lossy())
         .map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         println!(
             "{}",
             success(&format_operation_result(
@@ -160,9 +160,9 @@ pub fn run_gen(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_prove(cli: &Cli) -> Result<()> {
+pub fn run_prove(cfg: &Config) -> Result<()> {
     let pkg_name =
-        util::get_package_name(cli.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
+        util::get_package_name(cfg.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
 
     // Validate that required build files exist
     let required_files = vec![
@@ -170,12 +170,12 @@ pub fn run_prove(cli: &Cli) -> Result<()> {
         util::get_witness_path(&pkg_name, Flavour::Bb),
     ];
 
-    if !cli.dry_run {
+    if !cfg.dry_run {
         util::validate_files_exist(&required_files).map_err(enhance_error_with_suggestions)?;
         directories::ensure_evm_target_dir().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!(
             "Would run: bb prove -b ./target/bb/{}.json -w ./target/bb/{}.gz -o ./target/evm/ --oracle_hash keccak --output_format bytes_and_fields",
             pkg_name, pkg_name
@@ -190,7 +190,7 @@ pub fn run_prove(cli: &Cli) -> Result<()> {
     let timer = Timer::start();
     bb_operations::generate_evm_proof_and_vk(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let proof_path = util::get_proof_path(Flavour::Evm);
         let vk_path = util::get_vk_path(Flavour::Evm);
         println!(
@@ -215,16 +215,16 @@ pub fn run_prove(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_verify(cli: &Cli) -> Result<()> {
+pub fn run_verify(cfg: &Config) -> Result<()> {
     let pkg_name =
-        util::get_package_name(cli.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
+        util::get_package_name(cfg.pkg.as_ref()).map_err(enhance_error_with_suggestions)?;
 
     // Validate that required EVM artifacts exist
-    if !cli.dry_run {
+    if !cfg.dry_run {
         bb_operations::validate_evm_artifacts().map_err(enhance_error_with_suggestions)?;
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!(
             "Would run: bb verify -p ./target/evm/proof -k ./target/evm/vk -j ./target/evm/public_inputs"
         );
@@ -234,7 +234,7 @@ pub fn run_verify(cli: &Cli) -> Result<()> {
     let timer = Timer::start();
     bb_operations::verify_evm_proof(&pkg_name).map_err(enhance_error_with_suggestions)?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         println!(
             "{}",
             success(&format!(
@@ -255,16 +255,16 @@ pub fn run_verify(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_deploy(cli: &Cli, network: &str) -> Result<()> {
+pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
     load_env_vars();
 
     // Validate Foundry installation
-    if !cli.dry_run {
+    if !cfg.dry_run {
         foundry::validate_foundry_installation().map_err(enhance_error_with_suggestions)?;
     }
 
     // Check that verifier contract exists
-    if !cli.dry_run && !directories::verifier_contract_exists() {
+    if !cfg.dry_run && !directories::verifier_contract_exists() {
         return Err(create_smart_error(
             "Verifier contract not found",
             &[
@@ -296,13 +296,13 @@ pub fn run_deploy(cli: &Cli, network: &str) -> Result<()> {
         )
     })?;
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!("Would deploy Verifier contract to network: {}", network);
         println!("Would use RPC URL: {}", rpc_url);
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Deploying Verifier contract to {}", network);
     }
 
@@ -317,7 +317,7 @@ pub fn run_deploy(cli: &Cli, network: &str) -> Result<()> {
     }
     std::fs::write(address_file, &contract_address).ok();
 
-    if !cli.quiet {
+    if !cfg.quiet {
         println!(
             "{}",
             success(&format!(
@@ -349,17 +349,17 @@ pub fn run_deploy(cli: &Cli, network: &str) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_calldata(cli: &Cli) -> Result<()> {
+pub fn run_calldata(cfg: &Config) -> Result<()> {
     load_env_vars();
 
     // Validate Foundry installation
-    if !cli.dry_run {
+    if !cfg.dry_run {
         foundry::validate_foundry_installation().map_err(enhance_error_with_suggestions)?;
     }
 
     // Check that proof fields JSON exists (BB output for EVM)
     let proof_fields_path = std::path::PathBuf::from("./target/evm/proof_fields.json");
-    if !cli.dry_run && !proof_fields_path.exists() {
+    if !cfg.dry_run && !proof_fields_path.exists() {
         return Err(create_smart_error(
             "Proof fields file not found",
             &[
@@ -369,13 +369,13 @@ pub fn run_calldata(cli: &Cli) -> Result<()> {
         ));
     }
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!("Would generate calldata from proof fields JSON");
         println!("Would read: {}", proof_fields_path.display());
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Generating calldata for EVM proof verification");
     }
 
@@ -388,7 +388,7 @@ pub fn run_calldata(cli: &Cli) -> Result<()> {
     std::fs::write(&calldata_path, &proof_fields_content)
         .map_err(|e| color_eyre::eyre::eyre!("Failed to write calldata file: {}", e))?;
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let calldata_timer = Timer::start();
         println!(
             "{}",
@@ -420,11 +420,11 @@ pub fn run_calldata(cli: &Cli) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_verify_onchain(cli: &Cli) -> Result<()> {
+pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
     load_env_vars();
 
     // Validate Foundry installation
-    if !cli.dry_run {
+    if !cfg.dry_run {
         foundry::validate_foundry_installation().map_err(enhance_error_with_suggestions)?;
     }
 
@@ -445,7 +445,7 @@ pub fn run_verify_onchain(cli: &Cli) -> Result<()> {
 
     // Check that calldata exists
     let calldata_path = std::path::PathBuf::from("./target/evm/calldata.json");
-    if !cli.dry_run && !calldata_path.exists() {
+    if !cfg.dry_run && !calldata_path.exists() {
         return Err(create_smart_error(
             "Calldata file not found",
             &[
@@ -465,7 +465,7 @@ pub fn run_verify_onchain(cli: &Cli) -> Result<()> {
         )
     })?;
 
-    if cli.dry_run {
+    if cfg.dry_run {
         println!(
             "Would verify proof on-chain at contract: {}",
             contract_address
@@ -474,7 +474,7 @@ pub fn run_verify_onchain(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Verifying proof on-chain at contract: {}", contract_address);
     }
 
@@ -482,7 +482,7 @@ pub fn run_verify_onchain(cli: &Cli) -> Result<()> {
     let calldata_content = std::fs::read_to_string(&calldata_path)
         .map_err(|e| color_eyre::eyre::eyre!("Failed to read calldata file: {}", e))?;
 
-    if cli.verbose {
+    if cfg.verbose {
         info!("Using calldata: {}", calldata_content.trim());
     }
 
@@ -493,7 +493,7 @@ pub fn run_verify_onchain(cli: &Cli) -> Result<()> {
     println!("RPC URL: {}", rpc_url);
     println!("Calldata: {}", calldata_path.display());
 
-    if !cli.quiet {
+    if !cfg.quiet {
         let mut summary = OperationSummary::new();
         summary.add_operation(&format!(
             "On-chain verification prepared for contract: {}",
