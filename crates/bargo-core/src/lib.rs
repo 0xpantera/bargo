@@ -5,9 +5,12 @@ use tracing::{info, warn};
 mod backends;
 mod util;
 
+pub mod backend;
 pub mod cli;
 pub mod commands;
 pub mod config;
+
+use backend::{BackendKind, backend_for};
 
 pub use cli::Cli;
 pub use config::Config;
@@ -70,25 +73,29 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 if !cfg.quiet {
                     print_banner("cairo gen");
                 }
-                commands::cairo::run_gen(cfg)
+                let backend = backend_for(BackendKind::Cairo);
+                backend.generate(cfg)
             }
             CairoCommands::Prove => {
                 if !cfg.quiet {
                     print_banner("cairo prove");
                 }
-                commands::cairo::run_prove(cfg)
+                let backend = backend_for(BackendKind::Cairo);
+                backend.prove(cfg)
             }
             CairoCommands::Verify => {
                 if !cfg.quiet {
                     print_banner("cairo verify");
                 }
-                commands::cairo::run_verify(cfg)
+                let backend = backend_for(BackendKind::Cairo);
+                backend.verify(cfg)
             }
             CairoCommands::Calldata => {
                 if !cfg.quiet {
                     print_banner("cairo calldata");
                 }
-                commands::cairo::run_calldata(cfg)
+                let backend = backend_for(BackendKind::Cairo);
+                backend.calldata(cfg)
             }
             CairoCommands::Declare { network } => {
                 if !cfg.quiet {
@@ -96,17 +103,19 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 }
                 commands::cairo::run_declare(cfg, network)
             }
-            CairoCommands::Deploy { class_hash } => {
+            CairoCommands::Deploy { class_hash: _ } => {
                 if !cfg.quiet {
                     print_banner("cairo deploy");
                 }
-                commands::cairo::run_deploy(cfg, class_hash.as_deref())
+                let backend = backend_for(BackendKind::Cairo);
+                backend.deploy(cfg, None)
             }
             CairoCommands::VerifyOnchain { address } => {
                 if !cfg.quiet {
                     print_banner("cairo verify-onchain");
                 }
-                commands::cairo::run_verify_onchain(cfg, address.as_deref())
+                let backend = backend_for(BackendKind::Cairo);
+                backend.verify_onchain(cfg, address.as_deref())
             }
         },
         Commands::Evm { command } => match command {
@@ -114,37 +123,43 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 if !cfg.quiet {
                     print_banner("evm gen");
                 }
-                commands::evm::run_gen(cfg)
+                let backend = backend_for(BackendKind::Evm);
+                backend.generate(cfg)
             }
             EvmCommands::Prove => {
                 if !cfg.quiet {
                     print_banner("evm prove");
                 }
-                commands::evm::run_prove(cfg)
+                let backend = backend_for(BackendKind::Evm);
+                backend.prove(cfg)
             }
             EvmCommands::Verify => {
                 if !cfg.quiet {
                     print_banner("evm verify");
                 }
-                commands::evm::run_verify(cfg)
+                let backend = backend_for(BackendKind::Evm);
+                backend.verify(cfg)
             }
             EvmCommands::Deploy { network } => {
                 if !cfg.quiet {
                     print_banner("evm deploy");
                 }
-                commands::evm::run_deploy(cfg, network)
+                let backend = backend_for(BackendKind::Evm);
+                backend.deploy(cfg, Some(network))
             }
             EvmCommands::Calldata => {
                 if !cfg.quiet {
                     print_banner("evm calldata");
                 }
-                commands::evm::run_calldata(cfg)
+                let backend = backend_for(BackendKind::Evm);
+                backend.calldata(cfg)
             }
             EvmCommands::VerifyOnchain => {
                 if !cfg.quiet {
                     print_banner("evm verify-onchain");
                 }
-                commands::evm::run_verify_onchain(cfg)
+                let backend = backend_for(BackendKind::Evm);
+                backend.verify_onchain(cfg, None)
             }
         },
         Commands::Doctor => {
@@ -157,7 +172,7 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
 }
 
 fn setup_logging(verbose: bool, quiet: bool) -> Result<()> {
-    use tracing_subscriber::{fmt, EnvFilter};
+    use tracing_subscriber::{EnvFilter, fmt};
 
     if quiet {
         let subscriber = fmt()
