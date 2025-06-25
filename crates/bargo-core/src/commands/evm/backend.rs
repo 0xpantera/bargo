@@ -3,6 +3,8 @@
 //! This module provides an EVM backend that implements the BackendTrait,
 //! wrapping the existing EVM workflow functions to provide a unified interface.
 
+use std::any::Any;
+
 use color_eyre::Result;
 
 use crate::{backend::Backend, config::Config};
@@ -22,36 +24,41 @@ impl EvmBackend {
 
 impl Backend for EvmBackend {
     /// Generate Solidity verifier contract and setup Foundry project structure
-    fn generate(&self, cfg: &Config) -> Result<()> {
+    fn generate(&mut self, cfg: &Config) -> Result<()> {
         workflow::run_gen(cfg)
     }
 
     /// Generate proof using EVM/Keccak proof system
-    fn prove(&self, cfg: &Config) -> Result<()> {
+    fn prove(&mut self, cfg: &Config) -> Result<()> {
         workflow::run_prove(cfg)
     }
 
     /// Verify a generated EVM proof
-    fn verify(&self, cfg: &Config) -> Result<()> {
+    fn verify(&mut self, cfg: &Config) -> Result<()> {
         workflow::run_verify(cfg)
     }
 
     /// Generate calldata for EVM proof verification
-    fn calldata(&self, cfg: &Config) -> Result<()> {
+    fn calldata(&mut self, cfg: &Config) -> Result<()> {
         workflow::run_calldata(cfg)
     }
 
     /// Deploy Solidity verifier contract to EVM network
-    fn deploy(&self, cfg: &Config, network: Option<&str>) -> Result<()> {
+    fn deploy(&mut self, cfg: &Config, network: Option<&str>) -> Result<()> {
         // Use provided network or default to "sepolia"
         let network_str = network.unwrap_or("sepolia");
         workflow::run_deploy(cfg, network_str)
     }
 
     /// Verify proof on-chain using deployed EVM verifier
-    fn verify_onchain(&self, cfg: &Config, _address: Option<&str>) -> Result<()> {
+    fn verify_onchain(&mut self, cfg: &Config, _address: Option<&str>) -> Result<()> {
         // EVM verify_onchain doesn't take an address parameter in the current implementation
         workflow::run_verify_onchain(cfg)
+    }
+
+    /// Downcast to concrete backend type for type-specific operations
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use tracing::info;
 
-use crate::{backends, config::Config};
+use crate::{config::Config, runner::CmdSpec};
 
 /// Build argument list for nargo commands based on global config
 ///
@@ -54,16 +54,21 @@ pub fn build_nargo_args(cfg: &Config, base_args: &[&str]) -> Result<Vec<String>>
 /// ```
 pub fn run_nargo_command(cfg: &Config, base_args: &[&str]) -> Result<()> {
     let args = build_nargo_args(cfg, base_args)?;
-    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
     if cfg.verbose && !cfg.quiet {
         info!("Running: nargo {}", args.join(" "));
     }
 
-    if cfg.dry_run {
-        println!("Would run: nargo {}", args.join(" "));
-        return Ok(());
-    }
+    // Create command specification for nargo
+    let spec = CmdSpec::new("nargo".to_string(), args);
 
-    backends::nargo::run(&arg_refs)
+    // Use the runner to execute the command (handles dry-run automatically)
+    cfg.runner.run(&spec)
+
+    // TODO: Migrate remaining shell-outs to use runner abstraction:
+    // - backends::nargo::run calls in other modules
+    // - bb command executions
+    // - scarb command executions
+    // - garaga command executions
+    // - starknet CLI integrations
 }

@@ -4,6 +4,8 @@
 //! (Cairo/Starknet and EVM/Ethereum), allowing them to be used interchangeably
 //! through trait objects or concrete types.
 
+use std::any::Any;
+
 use color_eyre::Result;
 
 use crate::config::Config;
@@ -14,26 +16,29 @@ use crate::config::Config;
 /// allowing them to be used interchangeably through dynamic dispatch.
 pub trait Backend {
     /// Generate verifier contract and setup project structure
-    fn generate(&self, cfg: &Config) -> Result<()>;
+    fn generate(&mut self, cfg: &Config) -> Result<()>;
 
     /// Generate proof using the backend's proof system
-    fn prove(&self, cfg: &Config) -> Result<()>;
+    fn prove(&mut self, cfg: &Config) -> Result<()>;
 
     /// Verify a generated proof
-    fn verify(&self, cfg: &Config) -> Result<()>;
+    fn verify(&mut self, cfg: &Config) -> Result<()>;
 
     /// Generate calldata for proof verification
-    fn calldata(&self, cfg: &Config) -> Result<()>;
+    fn calldata(&mut self, cfg: &Config) -> Result<()>;
 
     /// Deploy verifier contract to specified network
     ///
     /// Note: Implementation varies by backend:
     /// - Cairo: Two-step process (declare contract to get class_hash, then deploy instance)
     /// - EVM: Single-step process (deploy contract directly to network)
-    fn deploy(&self, cfg: &Config, network: Option<&str>) -> Result<()>;
+    fn deploy(&mut self, cfg: &Config, network: Option<&str>) -> Result<()>;
 
     /// Verify proof on-chain using deployed verifier
-    fn verify_onchain(&self, cfg: &Config, address: Option<&str>) -> Result<()>;
+    fn verify_onchain(&mut self, cfg: &Config, address: Option<&str>) -> Result<()>;
+
+    /// Downcast to concrete backend type for type-specific operations
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Backend type identifier for factory function
