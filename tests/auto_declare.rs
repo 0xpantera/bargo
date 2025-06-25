@@ -169,3 +169,72 @@ fn cairo_deploy_all_flags_together() {
         .assert()
         .success();
 }
+
+#[test]
+fn cairo_deploy_auto_declare_vs_no_declare_output_differs() {
+    // Integration test to verify auto-declare vs no-declare produce different dry-run output
+
+    // Test auto-declare shows declare step in output
+    let auto_declare_output = Command::cargo_bin("bargo")
+        .unwrap()
+        .args([
+            "--dry-run",
+            "--pkg",
+            "test_pkg",
+            "cairo",
+            "deploy",
+            "--auto-declare",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let auto_declare_stdout = String::from_utf8(auto_declare_output).unwrap();
+
+    // Test no-declare with explicit class hash doesn't show declare step
+    let no_declare_output = Command::cargo_bin("bargo")
+        .unwrap()
+        .args([
+            "--dry-run",
+            "--pkg",
+            "test_pkg",
+            "cairo",
+            "deploy",
+            "--class-hash",
+            "0x123456789abcdef",
+            "--no-declare",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let no_declare_stdout = String::from_utf8(no_declare_output).unwrap();
+
+    // Auto-declare should show declare step
+    assert!(
+        auto_declare_stdout.contains("Would declare contract"),
+        "Auto-declare output should contain declare step: {}",
+        auto_declare_stdout
+    );
+
+    // No-declare should not show declare step
+    assert!(
+        !no_declare_stdout.contains("Would declare contract"),
+        "No-declare output should not contain declare step: {}",
+        no_declare_stdout
+    );
+
+    // Both should show deploy step
+    assert!(
+        auto_declare_stdout.contains("Would deploy contract"),
+        "Auto-declare output should contain deploy step"
+    );
+    assert!(
+        no_declare_stdout.contains("Would deploy contract"),
+        "No-declare output should contain deploy step"
+    );
+}

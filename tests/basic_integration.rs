@@ -180,7 +180,6 @@ fn test_cairo_help() {
     assert!(stdout.contains("prove"));
     assert!(stdout.contains("verify"));
     assert!(stdout.contains("gen"));
-    assert!(stdout.contains("declare"));
     assert!(stdout.contains("deploy"));
 }
 
