@@ -56,12 +56,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
     }
     let foundry_timer = Timer::start();
 
-    // TODO: Migrate foundry to runner abstraction in next checkpoint
-    if cfg.dry_run {
-        println!("Would run: forge init --force contracts/evm");
-    } else {
-        foundry::init_default_foundry_project().map_err(enhance_error_with_suggestions)?;
-    }
+    foundry::init_default_foundry_project(cfg).map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let foundry_dir = directories::get_evm_contracts_dir();
@@ -290,7 +285,7 @@ pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
     }
 
     let deploy_timer = Timer::start();
-    let contract_address = foundry::deploy_verifier_contract(&rpc_url, &private_key)
+    let contract_address = foundry::deploy_verifier_contract(cfg, &rpc_url, &private_key)
         .map_err(enhance_error_with_suggestions)?;
 
     // Save contract address for future commands
