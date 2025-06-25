@@ -21,24 +21,6 @@ pub fn ensure_available() -> Result<()> {
     Ok(())
 }
 
-/// Execute a garaga command with the given arguments
-pub fn run(args: &[&str]) -> Result<()> {
-    // Ensure garaga is available before running
-    ensure_available()?;
-
-    // Use the common spawn_cmd function from the parent module
-    super::spawn_cmd("garaga", args).map_err(|e| {
-        color_eyre::eyre::eyre!(
-            "{}\n\n\
-             Troubleshooting:\n\
-             • Ensure garaga is properly installed: pipx install garaga\n\
-             • Check that Python 3.10+ is available\n\
-             • Verify garaga is in your PATH",
-            e
-        )
-    })
-}
-
 /// Execute a garaga command and capture its output
 pub fn run_with_output(args: &[&str]) -> Result<(String, String)> {
     // Ensure garaga is available before running
