@@ -24,12 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config struct now includes `runner` field with `Arc<dyn Runner>` for command execution
 - Migrated `run_nargo_command` to use runner abstraction instead of direct backend calls
 - Cairo deploy command now auto-declares contracts by default (improves newcomer experience)
-- Cairo declare command is now deprecated (use `cairo deploy` with auto-declare instead)
 - Backend implementations now support stateful operations through mutable references
+- Backend configuration now uses `configure()` method instead of down-casting for type-specific settings
 - Improved dry-run mode handling for Cairo workflows
 - Refactored `check` command to use consolidated helper pattern (reduced from 15 to 2 lines)
 - Refactored `build` and `rebuild` commands to use consolidated helper pattern
 - Improved quiet flag handling in verbose logging output
+
+### Removed
+- `cairo declare` command (use `cairo deploy --auto-declare` instead for automatic declaration and deployment)
+- `as_any_mut()` method and RTTI down-casting from Backend trait (replaced with `configure()` method)
 - Enhanced global flag propagation consistency across all commands
 - All commands now properly honor --pkg, --verbose, --dry-run, and --quiet flags
 
