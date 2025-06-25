@@ -3,11 +3,12 @@
 //! This module provides an EVM backend that implements the BackendTrait,
 //! wrapping the existing EVM workflow functions to provide a unified interface.
 
-use std::any::Any;
-
 use color_eyre::Result;
 
-use crate::{backend::Backend, config::Config};
+use crate::{
+    backend::{Backend, BackendConfig},
+    config::Config,
+};
 
 use super::workflow;
 
@@ -56,9 +57,11 @@ impl Backend for EvmBackend {
         workflow::run_verify_onchain(cfg)
     }
 
-    /// Downcast to concrete backend type for type-specific operations
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
+    /// Configure backend with backend-specific settings
+    fn configure(&mut self, _config: BackendConfig) -> Result<()> {
+        // EVM backend currently doesn't need any configuration
+        // This could be extended in the future for EVM-specific settings
+        Ok(())
     }
 }
 

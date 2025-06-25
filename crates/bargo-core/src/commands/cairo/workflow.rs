@@ -123,7 +123,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         println!();
         println!("🎯 Next steps:");
         println!("  • Generate calldata: bargo cairo calldata");
-        println!("  • Declare contract: bargo cairo declare --network <network>");
+        println!("  • Deploy contract: bargo cairo deploy [--auto-declare]");
     }
 
     Ok(())
@@ -287,15 +287,18 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
     Ok(())
 }
 
-/// Run the Cairo declare workflow
+/// Internal function to declare a Cairo contract (used by auto-declare functionality)
+///
+/// This is an internal function used by the CairoBackend for auto-declare functionality.
+/// It should not be called directly by users - use `cairo deploy --auto-declare` instead.
 ///
 /// # Arguments
-/// * `cli` - CLI configuration
+/// * `cfg` - CLI configuration
 /// * `network` - Starknet network to declare on
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
-pub fn run_declare(cfg: &Config, network: &str) -> Result<()> {
+pub(crate) fn internal_declare(cfg: &Config, network: &str) -> Result<()> {
     load_env_vars();
 
     if cfg.dry_run {
@@ -358,7 +361,7 @@ pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
                         "No class hash provided and no saved class hash found",
                         &[
                             "Provide class hash with --class-hash option",
-                            "Or run 'bargo cairo declare' first to save class hash",
+                            "Or use 'bargo cairo deploy --auto-declare' to declare and deploy automatically",
                         ],
                     ));
                 }
