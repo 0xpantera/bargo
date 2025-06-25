@@ -1,7 +1,6 @@
 use color_eyre::Result;
 
 use crate::{
-    backends,
     commands::common::run_nargo_command,
     config::Config,
     util::{self, Flavour, Timer, format_operation_result, success},
@@ -13,13 +12,6 @@ pub fn should_rebuild(pkg: &str, cfg: &Config) -> Result<bool> {
         return Ok(true);
     }
     util::needs_rebuild(pkg)
-}
-
-/// Run `nargo execute` with the provided arguments.
-///
-/// The slice is typically produced by [`build_nargo_args`].
-pub fn run_nargo_execute(args: &[&str]) -> Result<()> {
-    backends::nargo::run(args)
 }
 
 /// Execute the build workflow
