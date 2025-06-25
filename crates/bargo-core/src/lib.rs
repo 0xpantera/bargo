@@ -9,8 +9,10 @@ pub mod backend;
 pub mod cli;
 pub mod commands;
 pub mod config;
+pub mod runner;
 
 use backend::{BackendKind, backend_for};
+use config::CairoDeployConfig;
 
 pub use cli::Cli;
 pub use config::Config;
@@ -73,28 +75,28 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 if !cfg.quiet {
                     print_banner("cairo gen");
                 }
-                let backend = backend_for(BackendKind::Cairo);
+                let mut backend = backend_for(BackendKind::Cairo);
                 backend.generate(cfg)
             }
             CairoCommands::Prove => {
                 if !cfg.quiet {
                     print_banner("cairo prove");
                 }
-                let backend = backend_for(BackendKind::Cairo);
+                let mut backend = backend_for(BackendKind::Cairo);
                 backend.prove(cfg)
             }
             CairoCommands::Verify => {
                 if !cfg.quiet {
                     print_banner("cairo verify");
                 }
-                let backend = backend_for(BackendKind::Cairo);
+                let mut backend = backend_for(BackendKind::Cairo);
                 backend.verify(cfg)
             }
             CairoCommands::Calldata => {
                 if !cfg.quiet {
                     print_banner("cairo calldata");
                 }
-                let backend = backend_for(BackendKind::Cairo);
+                let mut backend = backend_for(BackendKind::Cairo);
                 backend.calldata(cfg)
             }
             CairoCommands::Declare { network } => {
@@ -103,18 +105,33 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 }
                 commands::cairo::run_declare(cfg, network)
             }
-            CairoCommands::Deploy { class_hash: _ } => {
+            CairoCommands::Deploy {
+                class_hash,
+                auto_declare,
+                no_declare,
+            } => {
                 if !cfg.quiet {
                     print_banner("cairo deploy");
                 }
-                let backend = backend_for(BackendKind::Cairo);
+                let mut backend = backend_for(BackendKind::Cairo);
+
+                // Downcast to CairoBackend to set deploy configuration
+                if let Some(cairo_backend) = backend
+                    .as_any_mut()
+                    .downcast_mut::<commands::cairo::backend::CairoBackend>(
+                ) {
+                    let deploy_config =
+                        CairoDeployConfig::new(class_hash.clone(), *auto_declare, *no_declare);
+                    cairo_backend.set_deploy_config(deploy_config);
+                }
+
                 backend.deploy(cfg, None)
             }
             CairoCommands::VerifyOnchain { address } => {
                 if !cfg.quiet {
                     print_banner("cairo verify-onchain");
                 }
-                let backend = backend_for(BackendKind::Cairo);
+                let mut backend = backend_for(BackendKind::Cairo);
                 backend.verify_onchain(cfg, address.as_deref())
             }
         },
@@ -123,42 +140,42 @@ fn dispatch(cli: &Cli, cfg: &Config) -> Result<()> {
                 if !cfg.quiet {
                     print_banner("evm gen");
                 }
-                let backend = backend_for(BackendKind::Evm);
+                let mut backend = backend_for(BackendKind::Evm);
                 backend.generate(cfg)
             }
             EvmCommands::Prove => {
                 if !cfg.quiet {
                     print_banner("evm prove");
                 }
-                let backend = backend_for(BackendKind::Evm);
+                let mut backend = backend_for(BackendKind::Evm);
                 backend.prove(cfg)
             }
             EvmCommands::Verify => {
                 if !cfg.quiet {
                     print_banner("evm verify");
                 }
-                let backend = backend_for(BackendKind::Evm);
+                let mut backend = backend_for(BackendKind::Evm);
                 backend.verify(cfg)
             }
             EvmCommands::Deploy { network } => {
                 if !cfg.quiet {
                     print_banner("evm deploy");
                 }
-                let backend = backend_for(BackendKind::Evm);
+                let mut backend = backend_for(BackendKind::Evm);
                 backend.deploy(cfg, Some(network))
             }
             EvmCommands::Calldata => {
                 if !cfg.quiet {
                     print_banner("evm calldata");
                 }
-                let backend = backend_for(BackendKind::Evm);
+                let mut backend = backend_for(BackendKind::Evm);
                 backend.calldata(cfg)
             }
             EvmCommands::VerifyOnchain => {
                 if !cfg.quiet {
                     print_banner("evm verify-onchain");
                 }
-                let backend = backend_for(BackendKind::Evm);
+                let mut backend = backend_for(BackendKind::Evm);
                 backend.verify_onchain(cfg, None)
             }
         },
