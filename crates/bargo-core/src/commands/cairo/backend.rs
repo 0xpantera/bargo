@@ -3,12 +3,10 @@
 //! This module provides a Cairo backend that implements the BackendTrait,
 //! wrapping the existing Cairo workflow functions to provide a unified interface.
 
-use std::any::Any;
-
 use color_eyre::Result;
 
 use crate::{
-    backend::Backend,
+    backend::{Backend, BackendConfig},
     config::{CairoDeployConfig, Config},
 };
 
@@ -26,11 +24,6 @@ impl CairoBackend {
         Self {
             deploy_config: None,
         }
-    }
-
-    /// Set the deploy configuration for this backend
-    pub fn set_deploy_config(&mut self, config: CairoDeployConfig) {
-        self.deploy_config = Some(config);
     }
 }
 
@@ -74,7 +67,7 @@ impl Backend for CairoBackend {
         // In dry-run mode, skip all validations and just call the workflow functions
         if cfg.dry_run {
             if deploy_cfg.should_auto_declare() {
-                workflow::run_declare(cfg, network_str)?;
+                workflow::internal_declare(cfg, network_str)?;
             }
             return workflow::run_deploy(cfg, deploy_cfg.class_hash.as_deref());
         }
@@ -90,7 +83,7 @@ impl Backend for CairoBackend {
 
             if !class_hash_exists {
                 // Step 1: Declare the contract to get class_hash
-                workflow::run_declare(cfg, network_str)?;
+                workflow::internal_declare(cfg, network_str)?;
             }
         } else if deploy_cfg.class_hash.is_none() {
             // No auto-declare and no class hash provided - check if saved class hash exists
@@ -111,9 +104,14 @@ impl Backend for CairoBackend {
         workflow::run_verify_onchain(cfg, address)
     }
 
-    /// Downcast to concrete backend type for type-specific operations
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
+    /// Configure backend with backend-specific settings
+    fn configure(&mut self, config: BackendConfig) -> Result<()> {
+        match config {
+            BackendConfig::CairoDeploy(deploy_config) => {
+                self.deploy_config = Some(deploy_config);
+                Ok(())
+            }
+        }
     }
 }
 

@@ -11,9 +11,7 @@ pub mod scarb;
 pub mod workflow;
 
 // Re-export main workflow functions for use by main.rs
-pub use workflow::{
-    run_calldata, run_declare, run_deploy, run_gen, run_prove, run_verify, run_verify_onchain,
-};
+pub use workflow::{run_calldata, run_deploy, run_gen, run_prove, run_verify, run_verify_onchain};
 
 // Re-export utility functions that may be needed elsewhere
 // (Currently none are needed externally, but modules are available for import)
