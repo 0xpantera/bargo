@@ -3,6 +3,7 @@
 //! This module provides a clean, modular interface for EVM/Ethereum operations
 //! including proof generation, verification, contract management, and deployment.
 
+pub mod backend;
 pub mod bb_operations;
 pub mod directories;
 pub mod foundry;
