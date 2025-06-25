@@ -2,10 +2,9 @@ use color_eyre::Result;
 use tracing::info;
 
 use crate::{
-    backends,
     cli::Backend,
+    commands::common::run_nargo_command,
     config::Config,
-    commands::build_nargo_args,
     util::{self, Flavour, OperationSummary, Timer, format_operation_result, path, success},
 };
 
@@ -39,20 +38,13 @@ pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
 
     let pkg_name =
         util::get_package_name(cfg.pkg.as_ref()).map_err(util::enhance_error_with_suggestions)?;
-    let args = build_nargo_args(cfg, &["execute"])?;
-    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-
-    if cfg.verbose {
-        info!("Running: nargo {}", args.join(" "));
-    }
 
     if cfg.dry_run {
-        println!("Would run: nargo {}", args.join(" "));
-        return Ok(());
+        return run_nargo_command(cfg, &["execute"]);
     }
 
     let timer = Timer::start();
-    let result = backends::nargo::run(&arg_refs);
+    let result = run_nargo_command(cfg, &["execute"]);
 
     match result {
         Ok(()) => {
