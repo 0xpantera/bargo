@@ -103,15 +103,8 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
     }
     let contract_timer = Timer::start();
 
-    // TODO: Migrate garaga to runner abstraction in next checkpoint
-    if cfg.dry_run {
-        println!(
-            "Would run: garaga gen --system ultra_starknet_zk_honk --vk ./target/starknet/vk --output ./contracts/cairo/"
-        );
-    } else {
-        garaga::generate_cairo_contract_from_starknet_vk()
-            .map_err(enhance_error_with_suggestions)?;
-    }
+    garaga::generate_cairo_contract_from_starknet_vk(cfg)
+        .map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {
         let cairo_dir = directories::get_cairo_contracts_dir();
@@ -248,7 +241,7 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
     }
 
     let calldata_timer = Timer::start();
-    let calldata_path = garaga::generate_calldata_from_starknet_artifacts()
+    let calldata_path = garaga::generate_calldata_from_starknet_artifacts(cfg)
         .map_err(enhance_error_with_suggestions)?;
 
     if !cfg.quiet {

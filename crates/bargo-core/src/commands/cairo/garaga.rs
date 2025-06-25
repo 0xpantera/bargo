@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     backends,
+    commands::common,
+    config::Config,
     util::{self, Flavour, move_generated_project},
 };
 
@@ -17,6 +19,7 @@ use crate::{
 /// that can be used for on-chain proof verification on Starknet.
 ///
 /// # Arguments
+/// * `cfg` - Configuration containing runner and flags
 /// * `proof_path` - Path to the proof file
 /// * `vk_path` - Path to the verification key file
 /// * `public_inputs_path` - Path to the public inputs file
@@ -25,6 +28,7 @@ use crate::{
 /// # Returns
 /// * `Result<PathBuf>` - Path to generated calldata file or error
 pub fn generate_calldata(
+    _cfg: &Config,
     proof_path: &Path,
     vk_path: &Path,
     public_inputs_path: &Path,
@@ -46,6 +50,8 @@ pub fn generate_calldata(
         &public_inputs_str,
     ];
 
+    // TODO: Extend runner interface to capture stdout for calldata generation
+    // For now, fall back to direct backend call
     let (stdout, _stderr) = backends::garaga::run_with_output(&garaga_args)?;
 
     // Determine output path
@@ -64,14 +70,17 @@ pub fn generate_calldata(
 /// Convenience function that uses the standard Starknet artifact locations
 /// to generate calldata JSON.
 ///
+/// # Arguments
+/// * `cfg` - Configuration containing runner and flags
+///
 /// # Returns
 /// * `Result<PathBuf>` - Path to generated calldata file or error
-pub fn generate_calldata_from_starknet_artifacts() -> Result<PathBuf> {
+pub fn generate_calldata_from_starknet_artifacts(cfg: &Config) -> Result<PathBuf> {
     let proof_path = util::get_proof_path(Flavour::Starknet);
     let vk_path = util::get_vk_path(Flavour::Starknet);
     let public_inputs_path = util::get_public_inputs_path(Flavour::Starknet);
 
-    generate_calldata(&proof_path, &vk_path, &public_inputs_path, None)
+    generate_calldata(cfg, &proof_path, &vk_path, &public_inputs_path, None)
 }
 
 /// Generate Cairo verifier contract using Garaga
@@ -80,12 +89,17 @@ pub fn generate_calldata_from_starknet_artifacts() -> Result<PathBuf> {
 /// on Starknet using the provided verification key.
 ///
 /// # Arguments
+/// * `cfg` - Configuration containing runner and flags
 /// * `vk_path` - Path to the verification key file
 /// * `output_dir` - Optional output directory (defaults to ./contracts/cairo/)
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from Garaga execution
-pub fn generate_cairo_contract(vk_path: &Path, output_dir: Option<&str>) -> Result<()> {
+pub fn generate_cairo_contract(
+    cfg: &Config,
+    vk_path: &Path,
+    output_dir: Option<&str>,
+) -> Result<()> {
     let output = output_dir.unwrap_or("./contracts/cairo/");
 
     let vk_str = vk_path.to_string_lossy();
@@ -100,10 +114,14 @@ pub fn generate_cairo_contract(vk_path: &Path, output_dir: Option<&str>) -> Resu
         "cairo_verifier",
     ];
 
-    backends::garaga::run(&garaga_args)?;
+    common::run_garaga_command(cfg, &garaga_args)?;
 
-    // Move the generated project to the correct location
-    move_generated_project("cairo_verifier", output)
+    // Move the generated project to the correct location (skip in dry-run mode)
+    if cfg.dry_run {
+        Ok(())
+    } else {
+        move_generated_project("cairo_verifier", output)
+    }
 }
 
 /// Generate Cairo verifier contract using default Starknet VK path
@@ -111,11 +129,14 @@ pub fn generate_cairo_contract(vk_path: &Path, output_dir: Option<&str>) -> Resu
 /// Convenience function that uses the standard Starknet VK location
 /// to generate a Cairo verifier contract.
 ///
+/// # Arguments
+/// * `cfg` - Configuration containing runner and flags
+///
 /// # Returns
 /// * `Result<()>` - Success or error from Garaga execution
-pub fn generate_cairo_contract_from_starknet_vk() -> Result<()> {
+pub fn generate_cairo_contract_from_starknet_vk(cfg: &Config) -> Result<()> {
     let vk_path = util::get_vk_path(Flavour::Starknet);
-    generate_cairo_contract(&vk_path, None)
+    generate_cairo_contract(cfg, &vk_path, None)
 }
 
 /// Validate that required Starknet artifacts exist for Garaga operations
