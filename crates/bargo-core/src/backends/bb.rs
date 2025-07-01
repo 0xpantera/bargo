@@ -1,7 +1,7 @@
 //! BB operations have been migrated to the runner abstraction
 //!
 //! All bb command executions now use the runner system through
-//! `commands::common::run_bb_command()` which provides:
+//! `commands::common::run_tool()` which provides:
 //! - Unified dry-run handling
 //! - Consistent logging
 //! - Testable command execution
@@ -11,6 +11,6 @@
 
 // This module is kept for module structure compatibility
 // All bb functionality has moved to:
-// - commands::common::run_bb_command() for execution
+// - commands::common::run_tool() for execution
 // - commands::cairo::bb_operations for Cairo-specific operations
 // - commands::evm::bb_operations for EVM-specific operations

@@ -139,24 +139,3 @@ pub fn run_tool_capture(cfg: &Config, tool: &str, args: &[&str]) -> Result<Strin
     // Use the runner to execute the command and capture output
     cfg.runner.run_capture(&spec)
 }
-
-// Legacy helper functions - these are deprecated and will be removed
-// Use run_tool() and run_tool_capture() instead
-
-/// Legacy bb command helper - use run_tool(cfg, "bb", args) instead
-#[deprecated(note = "Use run_tool(cfg, \"bb\", args) instead")]
-pub fn run_bb_command(cfg: &Config, args: &[&str]) -> Result<()> {
-    run_tool(cfg, "bb", args)
-}
-
-/// Legacy garaga command helper - use run_tool(cfg, "garaga", args) instead
-#[deprecated(note = "Use run_tool(cfg, \"garaga\", args) instead")]
-pub fn run_garaga_command(cfg: &Config, args: &[&str]) -> Result<()> {
-    run_tool(cfg, "garaga", args)
-}
-
-/// Legacy foundry command helper - use run_tool(cfg, command, args) instead
-#[deprecated(note = "Use run_tool(cfg, command, args) instead")]
-pub fn run_foundry_command(cfg: &Config, command: &str, args: &[&str]) -> Result<()> {
-    run_tool(cfg, command, args)
-}
