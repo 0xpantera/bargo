@@ -270,7 +270,7 @@ impl Runner for RealRunner {
 /// It also maintains a history of all commands for testing purposes.
 #[derive(Debug)]
 pub struct DryRunRunner {
-    history: std::sync::Mutex<Vec<CmdSpec>>,
+    history: std::sync::Mutex<Vec<(CmdSpec, Option<String>)>>,
 }
 
 impl DryRunRunner {
@@ -287,8 +287,8 @@ impl DryRunRunner {
     /// were generated without actually executing them.
     ///
     /// # Returns
-    /// * `Vec<CmdSpec>` - List of all command specifications in order
-    pub fn history(&self) -> Vec<CmdSpec> {
+    /// * `Vec<(CmdSpec, Option<String>)>` - List of all command specifications and their captured output (if any)
+    pub fn history(&self) -> Vec<(CmdSpec, Option<String>)> {
         self.history.lock().unwrap().clone()
     }
 
@@ -297,6 +297,49 @@ impl DryRunRunner {
     /// This is useful for testing when you want to reset between test cases.
     pub fn clear_history(&self) {
         self.history.lock().unwrap().clear();
+    }
+
+    /// Generate realistic fake output for a command
+    ///
+    /// This method returns appropriate fake output based on the command and arguments,
+    /// allowing tests to verify that parsing logic works correctly in dry-run mode.
+    fn generate_fake_output(&self, spec: &CmdSpec) -> String {
+        match spec.cmd.as_str() {
+            "garaga" => {
+                // For garaga calldata commands, return JSON with calldata field
+                if spec.args.contains(&"calldata".to_string()) {
+                    r#"{"calldata": ["0x1234567890abcdef", "0xfedcba0987654321"]}"#.to_string()
+                } else {
+                    // For other garaga commands, return generic output
+                    "Garaga operation completed successfully".to_string()
+                }
+            }
+            "forge" => {
+                // For forge create commands, return deployment info
+                if spec.args.contains(&"create".to_string()) {
+                    "Deployed to: 0x742d35Cc6634C0532925a3b8D400d1b0fB000000".to_string()
+                } else {
+                    // For other forge commands, return generic output
+                    "Forge operation completed successfully".to_string()
+                }
+            }
+            "cast" => {
+                // For cast commands, return generic output
+                "Cast operation completed successfully".to_string()
+            }
+            "bb" => {
+                // For bb commands, return generic output
+                "BB operation completed successfully".to_string()
+            }
+            "nargo" => {
+                // For nargo commands, return generic output
+                "Nargo operation completed successfully".to_string()
+            }
+            _ => {
+                // For other commands, return generic output
+                format!("{} operation completed successfully", spec.cmd)
+            }
+        }
     }
 }
 
@@ -318,8 +361,8 @@ impl Runner for DryRunRunner {
     /// # Returns
     /// * `Result<()>` - Always succeeds unless there's a formatting error
     fn run(&self, spec: &CmdSpec) -> Result<()> {
-        // Record command in history
-        self.history.lock().unwrap().push(spec.clone());
+        // Record command in history with no captured output
+        self.history.lock().unwrap().push((spec.clone(), None));
 
         // Build the command string
         let mut cmd_parts = vec![spec.cmd.clone()];
@@ -348,8 +391,14 @@ impl Runner for DryRunRunner {
     }
 
     fn run_capture(&self, spec: &CmdSpec) -> Result<String> {
-        // Record command in history
-        self.history.lock().unwrap().push(spec.clone());
+        // Generate realistic fake output
+        let fake_output = self.generate_fake_output(spec);
+
+        // Record command in history with captured output
+        self.history
+            .lock()
+            .unwrap()
+            .push((spec.clone(), Some(fake_output.clone())));
 
         // Build the command string for display
         let mut cmd_parts = vec![spec.cmd.clone()];
@@ -367,8 +416,8 @@ impl Runner for DryRunRunner {
             println!("Would run (capturing output): {}", cmd_str);
         }
 
-        // Return placeholder output for dry-run
-        Ok("<dry-run-output>".to_string())
+        // Return realistic fake output
+        Ok(fake_output)
     }
 }
 
@@ -487,10 +536,12 @@ mod tests {
         // History should contain both commands
         let history = runner.history();
         assert_eq!(history.len(), 2);
-        assert_eq!(history[0].cmd, "echo");
-        assert_eq!(history[0].args, vec!["test1"]);
-        assert_eq!(history[1].cmd, "ls");
-        assert_eq!(history[1].args, vec!["-la"]);
+        assert_eq!(history[0].0.cmd, "echo");
+        assert_eq!(history[0].0.args, vec!["test1"]);
+        assert_eq!(history[0].1, None); // No captured output for run()
+        assert_eq!(history[1].0.cmd, "ls");
+        assert_eq!(history[1].0.args, vec!["-la"]);
+        assert_eq!(history[1].1, None); // No captured output for run()
     }
 
     #[test]
@@ -512,16 +563,21 @@ mod tests {
         let runner = DryRunRunner::new();
         let spec = CmdSpec::new("echo".to_string(), vec!["test output".to_string()]);
 
-        // Should return placeholder output
+        // Should return realistic fake output
         let result = runner.run_capture(&spec);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "<dry-run-output>");
+        let output = result.unwrap();
+        assert_eq!(output, "echo operation completed successfully");
 
-        // Should record in history
+        // Should record in history with captured output
         let history = runner.history();
         assert_eq!(history.len(), 1);
-        assert_eq!(history[0].cmd, "echo");
-        assert_eq!(history[0].args, vec!["test output"]);
+        assert_eq!(history[0].0.cmd, "echo");
+        assert_eq!(history[0].0.args, vec!["test output"]);
+        assert_eq!(
+            history[0].1,
+            Some("echo operation completed successfully".to_string())
+        );
     }
 
     #[test]
@@ -538,7 +594,58 @@ mod tests {
         // Both should be in history
         let history = runner.history();
         assert_eq!(history.len(), 2);
-        assert_eq!(history[0].cmd, "echo");
-        assert_eq!(history[1].cmd, "cat");
+        assert_eq!(history[0].0.cmd, "echo");
+        assert_eq!(history[0].1, None); // No captured output for run()
+        assert_eq!(history[1].0.cmd, "cat");
+        assert_eq!(
+            history[1].1,
+            Some("cat operation completed successfully".to_string())
+        );
+    }
+
+    #[test]
+    fn test_dry_run_runner_garaga_calldata_fake_output() {
+        let runner = DryRunRunner::new();
+        let spec = CmdSpec::new(
+            "garaga".to_string(),
+            vec![
+                "calldata".to_string(),
+                "--system".to_string(),
+                "ultra_starknet_zk_honk".to_string(),
+            ],
+        );
+
+        let result = runner.run_capture(&spec);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+
+        // Should return JSON with calldata field
+        assert!(output.contains("calldata"));
+        assert!(output.contains("0x1234567890abcdef"));
+
+        // Should be valid JSON
+        let parsed: serde_json::Value =
+            serde_json::from_str(&output).expect("Should be valid JSON");
+        assert!(parsed["calldata"].is_array());
+    }
+
+    #[test]
+    fn test_dry_run_runner_forge_create_fake_output() {
+        let runner = DryRunRunner::new();
+        let spec = CmdSpec::new(
+            "forge".to_string(),
+            vec![
+                "create".to_string(),
+                "MyContract.sol:MyContract".to_string(),
+            ],
+        );
+
+        let result = runner.run_capture(&spec);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+
+        // Should return deployment info
+        assert!(output.contains("Deployed to:"));
+        assert!(output.contains("0x742d35Cc6634C0532925a3b8D400d1b0fB000000"));
     }
 }

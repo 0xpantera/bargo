@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Command history tracking in `DryRunRunner` with `history()` and `clear_history()` methods
 - Unified `run_tool()` and `run_tool_capture()` helpers for all external command execution
 - Auto-declare functionality for Cairo deploy command with `--auto-declare` and `--no-declare` flags
+- Realistic fake output generation in `DryRunRunner::run_capture()` for better testing
+- Enhanced command history tracking in `DryRunRunner` with captured output storage
 - Backend trait methods now use `&mut self` for stateful operations (mutability upgrade)
 - Comprehensive test coverage for auto-declare functionality (10 new tests)
 - Comprehensive test coverage for runner abstraction (14 new unit tests)
@@ -27,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All external tool commands (bb, garaga, forge, nargo) now use unified `run_tool()` interface
 - Stdout capture operations (garaga calldata, foundry deploy) now use `run_tool_capture()`
 - Config struct now includes `runner` field with `Arc<dyn Runner>` for command execution
+- `DryRunRunner::run_capture()` now returns tool-specific fake output instead of generic placeholder
+- `DryRunRunner::history()` now returns `Vec<(CmdSpec, Option<String>)>` to include captured output
 - Migrated `run_nargo_command` to use runner abstraction instead of direct backend calls
 - Cairo deploy command now auto-declares contracts by default (improves newcomer experience)
 - Backend implementations now support stateful operations through mutable references
@@ -43,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Direct `std::process::Command` usage outside of `runner.rs` module
 - Tool-specific command helpers (replaced with unified `run_tool()` interface)
 - Enhanced global flag propagation consistency across all commands
+- Deprecated helper functions: `run_bb_command()`, `run_garaga_command()`, `run_foundry_command()`
 - All commands now properly honor --pkg, --verbose, --dry-run, and --quiet flags
 
 ### Fixed
