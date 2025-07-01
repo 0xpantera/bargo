@@ -3,7 +3,10 @@
 //! These tests demonstrate how to use DryRunRunner history for testing
 //! instead of grepping stdout output.
 
-use bargo_core::runner::{CmdSpec, DryRunRunner, Runner};
+use bargo_core::{
+    cmd_spec,
+    runner::{CmdSpec, DryRunRunner, Runner},
+};
 
 #[test]
 fn test_dry_run_runner_history_basic() {
@@ -59,7 +62,7 @@ fn test_dry_run_runner_history_with_capture() {
     assert_eq!(history[1].0.cmd, "garaga");
 
     // run_capture should return realistic fake output
-    let spec3 = CmdSpec::new("echo".to_string(), vec!["test".to_string()]);
+    let spec3 = cmd_spec!("echo", ["test"]);
     let output = runner.run_capture(&spec3).unwrap();
     assert_eq!(output, "echo operation completed successfully");
 }
@@ -167,10 +170,14 @@ fn test_cmd_spec_with_environment_and_cwd() {
     let runner = DryRunRunner::new();
 
     // Test CmdSpec with working directory and environment variables
-    let spec = CmdSpec::new("forge".to_string(), vec!["create".to_string()])
-        .with_cwd(std::path::PathBuf::from("/tmp/test"))
-        .with_env("RPC_URL".to_string(), "http://localhost:8545".to_string())
-        .with_env("PRIVATE_KEY".to_string(), "0x123".to_string());
+    let spec = cmd_spec!(
+        "forge", ["create"],
+        cwd: "/tmp/test",
+        env: {
+            "RPC_URL" => "http://localhost:8545",
+            "PRIVATE_KEY" => "0x123"
+        }
+    );
 
     runner.run(&spec).unwrap();
 
