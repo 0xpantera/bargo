@@ -7,7 +7,6 @@ use color_eyre::Result;
 use std::path::{Path, PathBuf};
 
 use crate::{
-    backends,
     commands::common,
     config::Config,
     util::{self, Flavour, move_generated_project},
@@ -28,7 +27,7 @@ use crate::{
 /// # Returns
 /// * `Result<PathBuf>` - Path to generated calldata file or error
 pub fn generate_calldata(
-    _cfg: &Config,
+    cfg: &Config,
     proof_path: &Path,
     vk_path: &Path,
     public_inputs_path: &Path,
@@ -50,9 +49,8 @@ pub fn generate_calldata(
         &public_inputs_str,
     ];
 
-    // TODO: Extend runner interface to capture stdout for calldata generation
-    // For now, fall back to direct backend call
-    let (stdout, _stderr) = backends::garaga::run_with_output(&garaga_args)?;
+    // Use runner to capture stdout for calldata generation
+    let stdout = common::run_tool_capture(cfg, "garaga", &garaga_args)?;
 
     // Determine output path
     let calldata_path = output_path
@@ -114,7 +112,7 @@ pub fn generate_cairo_contract(
         "cairo_verifier",
     ];
 
-    common::run_garaga_command(cfg, &garaga_args)?;
+    common::run_tool(cfg, "garaga", &garaga_args)?;
 
     // Move the generated project to the correct location (skip in dry-run mode)
     if cfg.dry_run {

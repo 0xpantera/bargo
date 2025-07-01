@@ -28,8 +28,9 @@ pub fn generate_starknet_proof(cfg: &Config, pkg: &str) -> Result<()> {
     let bytecode = util::get_bytecode_path(pkg, Flavour::Bb);
     let witness = util::get_witness_path(pkg, Flavour::Bb);
 
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &[
             "prove",
             "--scheme",
@@ -61,8 +62,9 @@ pub fn generate_starknet_proof(cfg: &Config, pkg: &str) -> Result<()> {
 pub fn generate_starknet_vk(cfg: &Config, pkg: &str) -> Result<()> {
     let bytecode = util::get_bytecode_path(pkg, Flavour::Bb);
 
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &[
             "write_vk",
             "--oracle_hash",
@@ -91,8 +93,9 @@ pub fn verify_starknet_proof(cfg: &Config, _pkg: &str) -> Result<()> {
     let vk_path = util::get_vk_path(Flavour::Starknet);
     let public_inputs_path = util::get_public_inputs_path(Flavour::Starknet);
 
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &[
             "verify",
             "--scheme",
