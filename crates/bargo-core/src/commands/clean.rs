@@ -1,7 +1,12 @@
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use tracing::info;
 
-use crate::{config::Config, cli::Backend, util::{info as info_msg, success}};
+use crate::{
+    cli::Backend,
+    config::Config,
+    util::{info as info_msg, success},
+};
 
 pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
     if cfg.verbose {
@@ -16,7 +21,7 @@ pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
             }
 
             if std::path::Path::new("target").exists() {
-                std::fs::remove_dir_all("target")?;
+                std::fs::remove_dir_all("target").wrap_err("removing target directory")?;
                 if !cfg.quiet {
                     println!("{}", success("Removed target/"));
                 }
@@ -31,7 +36,7 @@ pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
             }
 
             if std::path::Path::new("target/bb").exists() {
-                std::fs::remove_dir_all("target/bb")?;
+                std::fs::remove_dir_all("target/bb").wrap_err("removing target/bb directory")?;
                 if !cfg.quiet {
                     println!("{}", success("Removed target/bb/"));
                 }
@@ -46,7 +51,8 @@ pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
             }
 
             if std::path::Path::new("target/starknet").exists() {
-                std::fs::remove_dir_all("target/starknet")?;
+                std::fs::remove_dir_all("target/starknet")
+                    .wrap_err("removing target/starknet directory")?;
                 if !cfg.quiet {
                     println!("{}", success("Removed target/starknet/"));
                 }

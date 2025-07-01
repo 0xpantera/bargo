@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 
 /// Specification for a command to be executed
 ///
@@ -197,9 +198,9 @@ impl Runner for RealRunner {
         }
 
         // Execute the command
-        let output = cmd.output().map_err(|e| {
-            color_eyre::eyre::eyre!("Failed to execute command '{}': {}", spec.cmd, e)
-        })?;
+        let output = cmd
+            .output()
+            .wrap_err_with(|| format!("Failed to execute command '{}'", spec.cmd))?;
 
         // Check if command succeeded
         if !output.status.success() {
@@ -212,7 +213,14 @@ impl Runner for RealRunner {
                 output.status.code(),
                 stdout,
                 stderr
-            ));
+            ))
+            .wrap_err_with(|| {
+                format!(
+                    "Command execution failed: {} {}",
+                    spec.cmd,
+                    spec.args.join(" ")
+                )
+            });
         }
 
         // Print stdout if there's any output
@@ -240,9 +248,9 @@ impl Runner for RealRunner {
         }
 
         // Execute the command
-        let output = cmd.output().map_err(|e| {
-            color_eyre::eyre::eyre!("Failed to execute command '{}': {}", spec.cmd, e)
-        })?;
+        let output = cmd
+            .output()
+            .wrap_err_with(|| format!("Failed to execute command '{}'", spec.cmd))?;
 
         // Check if command succeeded
         if !output.status.success() {
@@ -255,7 +263,14 @@ impl Runner for RealRunner {
                 output.status.code(),
                 stdout,
                 stderr
-            ));
+            ))
+            .wrap_err_with(|| {
+                format!(
+                    "Command execution failed: {} {}",
+                    spec.cmd,
+                    spec.args.join(" ")
+                )
+            });
         }
 
         // Return stdout as string
