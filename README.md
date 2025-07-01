@@ -398,6 +398,52 @@ cargo build
 cargo test
 ```
 
+### Testing
+
+bargo uses a comprehensive testing strategy with multiple test types:
+
+#### Test Structure
+- **Unit Tests**: Located in `crates/bargo-core/src/` alongside source code
+- **Integration Tests**: Located in `tests/` directory with dedicated test files:
+  - `tests/build_integration.rs` - Tests for `bargo build` workflow
+  - `tests/cairo_integration.rs` - Tests for `cairo prove/gen` workflows
+  - `tests/cli_smoke.rs` - Basic CLI command validation
+  - `tests/auto_declare.rs` - Auto-declare functionality tests
+  - `tests/error_context.rs` - Error handling and context tests
+
+#### Integration Test Framework
+Integration tests use `DryRunRunner` to verify command execution without running external tools:
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific integration test suite
+cargo test --test build_integration
+cargo test --test cairo_integration
+
+# Run individual test
+cargo test --test build_integration test_build_command_dry_run
+```
+
+#### Golden File Snapshots
+Integration tests compare generated directory structures against golden snapshots:
+
+- **Fixtures**: `tests/fixtures/simple_circuit/` contains a minimal Noir project
+- **Golden Snapshots**: `tests/goldens/simple_circuit_build/` contains expected build output
+- **Cross-Platform**: Uses `path-slash` crate for consistent path handling across Windows/Unix
+
+#### Refreshing Golden Snapshots
+When build output format changes, update golden files:
+
+1. Manually run a real build: `cd tests/fixtures/simple_circuit && nargo execute`
+2. Copy generated `target/` directory to `tests/goldens/simple_circuit_build/`
+3. Normalize paths using forward slashes for cross-platform compatibility
+4. Commit updated golden files
+
+#### Thread Safety
+Integration tests use `ScopedDir` guards to prevent race conditions when running in parallel, ensuring each test operates in an isolated directory context.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.

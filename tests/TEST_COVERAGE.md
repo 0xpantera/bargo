@@ -4,9 +4,9 @@ This document provides an overview of the current test coverage for bargo, inclu
 
 ## Overview
 
-**Total Tests: 38**
-- **Unit Tests: 24** (Testing internal functionality and utilities)
-- **Integration Tests: 14** (Testing CLI commands and user workflows)
+**Total Tests: 92**
+- **Unit Tests: 24** (Testing internal functionality and utilities)  
+- **Integration Tests: 68** (Testing CLI commands, workflows, and golden file snapshots)
 
 **Coverage Status: ✅ Excellent** - Core functionality is well tested with both unit and integration tests.
 
@@ -14,11 +14,18 @@ This document provides an overview of the current test coverage for bargo, inclu
 
 ```
 tests/
-├── basic_integration.rs     # 14 working integration tests
-├── integration.rs          # Empty placeholder
-└── fixtures/               # Test data for integration tests
-    ├── sample_circuit/     # Valid Noir circuit for testing
-    └── invalid_project/    # Invalid project for error testing
+├── auto_declare.rs         # 11 tests for auto-declare functionality
+├── basic_integration.rs    # 14 CLI command integration tests
+├── build_integration.rs    # 6 tests for bargo build workflow with golden snapshots
+├── cairo_integration.rs    # 6 tests for cairo prove/gen workflows
+├── cli_smoke.rs           # 23 CLI smoke tests for all commands
+├── error_context.rs       # 8 tests for error handling and context
+├── fixtures/              # Test data for integration tests
+│   ├── simple_circuit/    # Valid Noir circuit for golden file testing
+│   ├── sample_circuit/    # Valid Noir circuit for testing
+│   └── invalid_project/   # Invalid project for error testing
+└── goldens/               # Golden file snapshots for integration tests
+    └── simple_circuit_build/ # Expected build output structure
 src/
 ├── backends/              # 6 unit tests for tool integration
 ├── util/                  # 18 unit tests for core utilities
@@ -44,9 +51,47 @@ src/
 - ✅ **Artifact Organization** - Moves files between target directories
 - ✅ **Flavour Consistency** - Tests backend-specific path generation
 
-## Integration Test Coverage (14 tests)
+## Integration Test Coverage (68 tests)
 
-### Core Commands (5 tests)
+### Golden File Integration Tests (12 tests)
+- ✅ **Build Workflow Testing** - `build_integration.rs` with 6 comprehensive tests
+  - ✅ Build command dry-run execution with `DryRunRunner` history verification
+  - ✅ Golden snapshot comparison for build artifacts (`target/bb/*.json`, `*.gz`)  
+  - ✅ Package override and verbose mode functionality
+  - ✅ Cross-platform path handling with `path-slash` normalization
+  - ✅ Fixture validation and directory structure verification
+- ✅ **Cairo Workflow Testing** - `cairo_integration.rs` with 6 comprehensive tests  
+  - ✅ Cairo prove command execution and command history validation
+  - ✅ Build artifact requirement validation (missing files handled gracefully)
+  - ✅ Package override and verbose mode support
+  - ✅ Cross-platform file path normalization for all workflows
+  - ✅ Cairo gen command testing with proper error handling
+
+### CLI Smoke Tests (23 tests)
+- ✅ **Command Interface Validation** - `cli_smoke.rs` comprehensive CLI testing
+  - ✅ All trait system workflows (prove, verify, gen, calldata for both EVM and Cairo)
+  - ✅ Global flag propagation (`--pkg`, `--verbose`, `--dry-run`, `--quiet`)
+  - ✅ Dry-run mode functionality across all commands
+  - ✅ Package flag inheritance and consistency
+  - ✅ Command parsing and help text validation
+
+### Auto-Declare Functionality (11 tests)
+- ✅ **Cairo Deploy Workflow** - `auto_declare.rs` dedicated feature testing
+  - ✅ Auto-declare default behavior and flag combinations
+  - ✅ Conflicting flag detection and error handling
+  - ✅ Package flag propagation with declare workflows
+  - ✅ Verbose and quiet mode interaction with auto-declare
+  - ✅ Class hash handling and no-declare scenarios
+
+### Error Context Testing (8 tests)
+- ✅ **Error Handling Validation** - `error_context.rs` comprehensive error testing
+  - ✅ Missing project detection with helpful error messages
+  - ✅ Missing build artifacts error context and suggestions
+  - ✅ Tool execution error chain propagation  
+  - ✅ File operation error context enhancement
+  - ✅ Workflow error propagation and chaining
+
+### Basic Integration Tests (14 tests)
 - ✅ `bargo --help` - Shows comprehensive help with all commands
 - ✅ `bargo --version` - Displays version information  
 - ✅ `bargo doctor` - Checks system dependencies (nargo, bb, garaga, foundry)
@@ -96,7 +141,15 @@ cargo test --bin bargo
 
 ### Integration Tests Only  
 ```bash
-cargo test --test basic_integration
+# Run all integration tests
+cargo test --test basic_integration --test build_integration --test cairo_integration
+
+# Run specific integration test suites
+cargo test --test build_integration    # Golden file snapshot tests
+cargo test --test cairo_integration    # Cairo workflow tests  
+cargo test --test cli_smoke           # CLI smoke tests
+cargo test --test auto_declare        # Auto-declare functionality
+cargo test --test error_context       # Error handling tests
 ```
 
 ### Specific Test
@@ -118,9 +171,11 @@ cargo test -- --nocapture
 - ✅ **Core logic** - Path resolution, file validation, rebuild detection
 
 ### Testing Approach
-- **Isolated tests** - No shared state between tests
-- **Dry-run focused** - Avoid external dependencies where possible  
-- **Real CLI testing** - Integration tests invoke actual binary
+- **Isolated tests** - Thread-safe execution with `ScopedDir` guards prevent race conditions
+- **Dry-run focused** - Uses `DryRunRunner` to avoid external dependencies
+- **Golden file snapshots** - Compare generated directory structures against expected output
+- **Real CLI testing** - Integration tests invoke actual binary and verify command history
+- **Cross-platform compatibility** - Path normalization using `path-slash` crate
 - **Comprehensive error checking** - Verify both success and failure cases
 
 ## CI Integration
@@ -142,10 +197,12 @@ The tests are designed to pass in CI environments:
 ## Coverage Assessment
 
 ### Excellent Coverage Areas
-- **CLI interface** - All major commands and flags tested
+- **CLI interface** - All major commands and flags tested (68 integration tests)
 - **Core utilities** - File handling, path resolution, rebuild logic
-- **Error handling** - Missing files and invalid commands
+- **Error handling** - Missing files, invalid commands, and error context propagation
 - **Help system** - All help text is verified
+- **Golden file testing** - Build artifacts and directory structure validation
+- **Workflow orchestration** - Complete build and prove workflows tested end-to-end
 
 ### Good Coverage Areas  
 - **Backend integration** - Tool availability checking
@@ -159,9 +216,11 @@ The tests are designed to pass in CI environments:
 ## Recommendations
 
 ### For Development
-1. **Run tests frequently** - `cargo test` is fast and reliable
-2. **Add tests for new features** - Follow existing patterns in `basic_integration.rs`
-3. **Use dry-run mode** - For testing new commands without side effects
+1. **Run tests frequently** - `cargo test` is fast and reliable (92 tests in ~10 seconds)
+2. **Add tests for new features** - Follow existing patterns in `build_integration.rs` or `cairo_integration.rs`
+3. **Use golden file testing** - For new workflows, create fixtures and expected output snapshots
+4. **Use dry-run mode** - For testing new commands without side effects
+5. **Update golden snapshots** - When build output changes, refresh `tests/goldens/` directory
 
 ### For CI/CD
 1. **Current tests are CI-ready** - No additional setup required
