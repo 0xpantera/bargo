@@ -1,11 +1,11 @@
 /// Create a smart error with context and suggestions
 pub fn create_smart_error(message: &str, suggestions: &[&str]) -> color_eyre::eyre::Error {
-    let mut error_msg = format!("❌ {}", message);
+    let mut error_msg = format!("❌ {message}");
 
     if !suggestions.is_empty() {
         error_msg.push_str("\n\n💡 Suggestions:");
         for suggestion in suggestions {
-            error_msg.push_str(&format!("\n   • {}", suggestion));
+            error_msg.push_str(&format!("\n   • {suggestion}"));
         }
     }
 
@@ -14,7 +14,7 @@ pub fn create_smart_error(message: &str, suggestions: &[&str]) -> color_eyre::ey
 
 /// Enhanced error with suggestions for common issues
 pub fn enhance_error_with_suggestions(error: color_eyre::eyre::Error) -> color_eyre::eyre::Error {
-    let error_msg = format!("{}", error);
+    let error_msg = format!("{error}");
 
     // Check for common error patterns and add suggestions
     if error_msg.contains("Required files are missing") {

@@ -282,7 +282,7 @@ pub(crate) fn internal_declare(cfg: &Config, network: &str) -> Result<()> {
     load_env_vars();
 
     if cfg.dry_run {
-        println!("Would declare contract on network: {}", network);
+        println!("Would declare contract on network: {network}");
         return Ok(());
     }
 
@@ -304,7 +304,7 @@ pub(crate) fn internal_declare(cfg: &Config, network: &str) -> Result<()> {
     // Implementation would depend on Starknet CLI integration
     // This is a placeholder for the actual declare logic
     println!("🚧 Contract declaration functionality coming soon");
-    println!("Network: {}", network);
+    println!("Network: {network}");
     println!("Contract directory: {}", cairo_dir.display());
 
     Ok(())
@@ -326,7 +326,7 @@ pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
             Some(hash) => hash.to_string(),
             None => "<class_hash_from_declare>".to_string(), // Placeholder for dry-run
         };
-        println!("Would deploy contract with class hash: {}", hash);
+        println!("Would deploy contract with class hash: {hash}");
         return Ok(());
     }
 
@@ -358,7 +358,7 @@ pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
     // Implementation would depend on Starknet CLI integration
     // This is a placeholder for the actual deploy logic
     println!("🚧 Contract deployment functionality coming soon");
-    println!("Class hash: {}", hash);
+    println!("Class hash: {hash}");
 
     Ok(())
 }
@@ -408,10 +408,7 @@ pub fn run_verify_onchain(cfg: &Config, address: Option<&str>) -> Result<()> {
     }
 
     if cfg.dry_run {
-        println!(
-            "Would verify proof on-chain at address: {}",
-            contract_address
-        );
+        println!("Would verify proof on-chain at address: {contract_address}");
         return Ok(());
     }
 
@@ -422,7 +419,7 @@ pub fn run_verify_onchain(cfg: &Config, address: Option<&str>) -> Result<()> {
     // Implementation would depend on Starknet CLI integration
     // This is a placeholder for the actual on-chain verification logic
     println!("🚧 On-chain verification functionality coming soon");
-    println!("Contract address: {}", contract_address);
+    println!("Contract address: {contract_address}");
     println!("Calldata: {}", calldata_path.display());
 
     Ok(())

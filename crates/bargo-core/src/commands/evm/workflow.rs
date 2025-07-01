@@ -276,8 +276,8 @@ pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
     })?;
 
     if cfg.dry_run {
-        println!("Would deploy Verifier contract to network: {}", network);
-        println!("Would use RPC URL: {}", rpc_url);
+        println!("Would deploy Verifier contract to network: {network}");
+        println!("Would use RPC URL: {rpc_url}");
         return Ok(());
     }
 
@@ -308,12 +308,11 @@ pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
                 deploy_timer.elapsed()
             ))
         );
-        println!("Contract address: {}", contract_address);
+        println!("Contract address: {contract_address}");
 
         let mut summary = OperationSummary::new();
         summary.add_operation(&format!(
-            "Verifier contract deployed at: {}",
-            contract_address
+            "Verifier contract deployed at: {contract_address}"
         ));
         summary.print();
         println!();
@@ -451,10 +450,7 @@ pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
     })?;
 
     if cfg.dry_run {
-        println!(
-            "Would verify proof on-chain at contract: {}",
-            contract_address
-        );
+        println!("Would verify proof on-chain at contract: {contract_address}");
         println!("Would use calldata from: {}", calldata_path.display());
         return Ok(());
     }
@@ -474,15 +470,14 @@ pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
     // This is a placeholder for actual on-chain verification
     // The actual implementation would depend on the specific verifier contract interface
     println!("🚧 On-chain verification functionality coming soon");
-    println!("Contract address: {}", contract_address);
-    println!("RPC URL: {}", rpc_url);
+    println!("Contract address: {contract_address}");
+    println!("RPC URL: {rpc_url}");
     println!("Calldata: {}", calldata_path.display());
 
     if !cfg.quiet {
         let mut summary = OperationSummary::new();
         summary.add_operation(&format!(
-            "On-chain verification prepared for contract: {}",
-            contract_address
+            "On-chain verification prepared for contract: {contract_address}"
         ));
         summary.print();
     }

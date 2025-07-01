@@ -32,14 +32,11 @@ impl OperationSummary {
 
         println!("\n{}", colorize("🎉 Summary:", colors::BOLD));
         for operation in &self.operations {
-            println!(
-                "   {}",
-                colorize(&format!("• {}", operation), colors::GREEN)
-            );
+            println!("   {}", colorize(&format!("• {operation}"), colors::GREEN));
         }
         println!(
             "   {}",
-            colorize(&format!("Total time: {}", time_str), colors::GRAY)
+            colorize(&format!("Total time: {time_str}"), colors::GRAY)
         );
     }
 }

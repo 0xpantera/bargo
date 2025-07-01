@@ -389,17 +389,17 @@ impl Runner for DryRunRunner {
             let env_str = spec
                 .env
                 .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| format!("{k}={v}"))
                 .collect::<Vec<_>>()
                 .join(" ");
-            print!("{} ", env_str);
+            print!("{env_str} ");
         }
 
         // Print working directory if specified
         if let Some(ref cwd) = spec.cwd {
             println!("Would run in directory '{}': {}", cwd.display(), cmd_str);
         } else {
-            println!("Would run: {}", cmd_str);
+            println!("Would run: {cmd_str}");
         }
 
         Ok(())
@@ -428,7 +428,7 @@ impl Runner for DryRunRunner {
                 cmd_str
             );
         } else {
-            println!("Would run (capturing output): {}", cmd_str);
+            println!("Would run (capturing output): {cmd_str}");
         }
 
         // Return realistic fake output

@@ -44,6 +44,22 @@ pub fn get_package_name(pkg_override: Option<&String>) -> Result<String> {
     parse_package_name(&nargo_toml_path)
 }
 
+/// Get the package name from Nargo.toml in a specific directory, with optional override
+pub fn get_package_name_in_directory(
+    pkg_override: Option<&String>,
+    working_dir: &Path,
+) -> Result<String> {
+    if let Some(pkg_name) = pkg_override {
+        debug!("Using package name override: {}", pkg_name);
+        return Ok(pkg_name.clone());
+    }
+
+    let project_root = find_project_root(working_dir)?;
+    let nargo_toml_path = project_root.join("Nargo.toml");
+
+    parse_package_name(&nargo_toml_path)
+}
+
 /// Parse the package name from a Nargo.toml file
 pub fn parse_package_name(nargo_toml_path: &Path) -> Result<String> {
     let toml_content = std::fs::read_to_string(nargo_toml_path).map_err(|e| {
@@ -97,12 +113,12 @@ pub fn target_dir(flavour: Flavour) -> PathBuf {
 
 /// Get the bytecode file path for a package with specific backend flavour
 pub fn get_bytecode_path(pkg_name: &str, flavour: Flavour) -> PathBuf {
-    target_dir(flavour).join(format!("{}.json", pkg_name))
+    target_dir(flavour).join(format!("{pkg_name}.json"))
 }
 
 /// Get the witness file path for a package with specific backend flavour
 pub fn get_witness_path(pkg_name: &str, flavour: Flavour) -> PathBuf {
-    target_dir(flavour).join(format!("{}.gz", pkg_name))
+    target_dir(flavour).join(format!("{pkg_name}.gz"))
 }
 
 /// Get the proof file path for specific backend flavour
@@ -133,7 +149,7 @@ pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> 
     })?;
 
     // Move bytecode file from target/ to target/flavour/
-    let source_bytecode = PathBuf::from("target").join(format!("{}.json", pkg_name));
+    let source_bytecode = PathBuf::from("target").join(format!("{pkg_name}.json"));
     let dest_bytecode = get_bytecode_path(pkg_name, flavour);
 
     if source_bytecode.exists() {
@@ -153,8 +169,67 @@ pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> 
     }
 
     // Move witness file from target/ to target/flavour/
-    let source_witness = PathBuf::from("target").join(format!("{}.gz", pkg_name));
+    let source_witness = PathBuf::from("target").join(format!("{pkg_name}.gz"));
     let dest_witness = get_witness_path(pkg_name, flavour);
+
+    if source_witness.exists() {
+        std::fs::rename(&source_witness, &dest_witness).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_witness.display(),
+                dest_witness.display(),
+                e
+            )
+        })?;
+        debug!(
+            "Moved witness: {} -> {}",
+            source_witness.display(),
+            dest_witness.display()
+        );
+    }
+
+    Ok(())
+}
+
+/// Organize build artifacts in a specific directory by moving nargo output to appropriate flavour directory
+pub fn organize_build_artifacts_in_directory(
+    pkg_name: &str,
+    flavour: Flavour,
+    working_dir: &Path,
+) -> Result<()> {
+    // Create the target directory for the flavour if it doesn't exist
+    let flavour_dir = working_dir.join(target_dir(flavour));
+    std::fs::create_dir_all(&flavour_dir).map_err(|e| {
+        color_eyre::eyre::eyre!(
+            "Failed to create target directory {}: {}",
+            flavour_dir.display(),
+            e
+        )
+    })?;
+
+    // Move bytecode file from target/ to target/flavour/
+    let source_bytecode = working_dir.join("target").join(format!("{pkg_name}.json"));
+    let dest_bytecode = working_dir.join(get_bytecode_path(pkg_name, flavour));
+
+    if source_bytecode.exists() {
+        std::fs::rename(&source_bytecode, &dest_bytecode).map_err(|e| {
+            color_eyre::eyre::eyre!(
+                "Failed to move {} to {}: {}",
+                source_bytecode.display(),
+                dest_bytecode.display(),
+                e
+            )
+        })?;
+        debug!(
+            "Moved bytecode: {} -> {}",
+            source_bytecode.display(),
+            dest_bytecode.display()
+        );
+    }
+
+    // Move witness file from target/ to target/flavour/
+    let source_witness = working_dir.join("target").join(format!("{pkg_name}.gz"));
+    let dest_witness = working_dir.join(get_witness_path(pkg_name, flavour));
 
     if source_witness.exists() {
         std::fs::rename(&source_witness, &dest_witness).map_err(|e| {

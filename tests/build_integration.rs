@@ -4,40 +4,11 @@
 //! and compare generated directory structures against golden snapshots.
 
 use assert_fs::TempDir;
-
 use bargo_core::config::Config;
 use bargo_core::runner::DryRunRunner;
 use path_slash::PathExt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-
-/// A thread-safe scoped directory changer that restores the original directory on drop
-/// This prevents race conditions when tests run in parallel
-struct ScopedDir {
-    _original: PathBuf,
-}
-
-impl ScopedDir {
-    /// Change to the specified directory and return a guard that will restore the original directory
-    fn new(new_dir: &Path) -> std::io::Result<Self> {
-        static DIR_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = DIR_LOCK.lock().unwrap();
-
-        let original = std::env::current_dir()?;
-        std::env::set_current_dir(new_dir)?;
-
-        Ok(ScopedDir {
-            _original: original,
-        })
-    }
-}
-
-impl Drop for ScopedDir {
-    fn drop(&mut self) {
-        let _ = std::env::set_current_dir(&self._original);
-    }
-}
 
 /// Copy a fixture directory to a temporary location
 fn copy_fixture_to_temp(fixture_name: &str, temp_dir: &TempDir) -> PathBuf {
@@ -191,11 +162,8 @@ fn test_build_command_dry_run() {
         runner: dry_runner.clone(),
     };
 
-    // Run bargo build command in the project directory using scoped directory change
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::build::run(&config)
-    };
+    // Run bargo build command in the project directory using working directory API
+    let result = bargo_core::commands::build::run_in_directory(&config, Some(&project_dir));
 
     // The command should succeed in dry run mode
     assert!(result.is_ok(), "Build command failed: {:?}", result.err());
@@ -358,10 +326,7 @@ fn test_build_command_with_package_override() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::build::run(&config)
-    };
+    let result = bargo_core::commands::build::run_in_directory(&config, Some(&project_dir));
 
     assert!(
         result.is_ok(),
@@ -408,10 +373,7 @@ fn test_build_command_verbose_mode() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::build::run(&config)
-    };
+    let result = bargo_core::commands::build::run_in_directory(&config, Some(&project_dir));
 
     assert!(
         result.is_ok(),
@@ -475,10 +437,7 @@ fn test_build_cross_platform_paths() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::build::run(&config)
-    };
+    let result = bargo_core::commands::build::run_in_directory(&config, Some(&project_dir));
 
     assert!(result.is_ok(), "Build command failed: {:?}", result.err());
 

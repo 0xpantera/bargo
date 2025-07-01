@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use std::path::Path;
 use tracing::info;
 
 use crate::{config::Config, runner::CmdSpec};
@@ -61,6 +62,78 @@ pub fn run_nargo_command(cfg: &Config, base_args: &[&str]) -> Result<()> {
 
     // Create command specification for nargo
     let spec = CmdSpec::new("nargo".to_string(), args);
+
+    // Use the runner to execute the command (handles dry-run automatically)
+    cfg.runner.run(&spec)
+}
+
+/// Run a nargo command in a specific working directory
+///
+/// This is similar to `run_nargo_command` but allows specifying a working directory
+/// for the command execution. If `working_dir` is None, behaves like `run_nargo_command`.
+///
+/// # Arguments
+/// * `cfg` - The global configuration containing all flags
+/// * `base_args` - Base command arguments to pass to nargo
+/// * `working_dir` - Optional working directory for command execution
+///
+/// # Returns
+/// * `Result<()>` - Success or error from command execution
+pub fn run_nargo_command_in_directory(
+    cfg: &Config,
+    base_args: &[&str],
+    working_dir: Option<&Path>,
+) -> Result<()> {
+    let args = build_nargo_args(cfg, base_args)?;
+
+    if cfg.verbose && !cfg.quiet {
+        info!("Running: nargo {}", args.join(" "));
+    }
+
+    // Create command specification for nargo
+    let mut spec = CmdSpec::new("nargo".to_string(), args);
+
+    // Set working directory if provided
+    if let Some(dir) = working_dir {
+        spec = spec.with_cwd(dir.to_path_buf());
+    }
+
+    // Use the runner to execute the command (handles dry-run automatically)
+    cfg.runner.run(&spec)
+}
+
+/// Run any external tool in a specific working directory
+///
+/// This is similar to `run_tool` but allows specifying a working directory
+/// for the command execution. If `working_dir` is None, behaves like `run_tool`.
+///
+/// # Arguments
+/// * `cfg` - The global configuration containing all flags and runner
+/// * `tool` - The tool command to run (bb, garaga, forge, cast, nargo, etc.)
+/// * `args` - Arguments to pass to the tool
+/// * `working_dir` - Optional working directory for command execution
+///
+/// # Returns
+/// * `Result<()>` - Success or error from command execution
+pub fn run_tool_in_directory(
+    cfg: &Config,
+    tool: &str,
+    args: &[&str],
+    working_dir: Option<&Path>,
+) -> Result<()> {
+    let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+    if cfg.verbose && !cfg.quiet {
+        info!("Running: {} {}", tool, args_vec.join(" "));
+    }
+
+    // Create command specification for the tool
+    let mut spec = CmdSpec::new(tool.to_string(), args_vec);
+
+    // Set working directory if provided
+    if let Some(dir) = working_dir {
+        spec = spec.with_cwd(dir.to_path_buf());
+    }
 
     // Use the runner to execute the command (handles dry-run automatically)
     cfg.runner.run(&spec)
@@ -135,6 +208,47 @@ pub fn run_tool_capture(cfg: &Config, tool: &str, args: &[&str]) -> Result<Strin
 
     // Create command specification for the tool
     let spec = CmdSpec::new(tool.to_string(), args_vec);
+
+    // Use the runner to execute the command and capture output
+    cfg.runner.run_capture(&spec)
+}
+
+/// Run any external tool in a specific working directory and capture its stdout
+///
+/// This is similar to `run_tool_capture` but allows specifying a working directory
+/// for the command execution. If `working_dir` is None, behaves like `run_tool_capture`.
+///
+/// # Arguments
+/// * `cfg` - The global configuration containing all flags and runner
+/// * `tool` - The tool command to run (bb, garaga, forge, cast, nargo, etc.)
+/// * `args` - Arguments to pass to the tool
+/// * `working_dir` - Optional working directory for command execution
+///
+/// # Returns
+/// * `Result<String>` - Stdout from command execution or error
+pub fn run_tool_capture_in_directory(
+    cfg: &Config,
+    tool: &str,
+    args: &[&str],
+    working_dir: Option<&Path>,
+) -> Result<String> {
+    let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+    if cfg.verbose && !cfg.quiet {
+        info!(
+            "Running (capturing output): {} {}",
+            tool,
+            args_vec.join(" ")
+        );
+    }
+
+    // Create command specification for the tool
+    let mut spec = CmdSpec::new(tool.to_string(), args_vec);
+
+    // Set working directory if provided
+    if let Some(dir) = working_dir {
+        spec = spec.with_cwd(dir.to_path_buf());
+    }
 
     // Use the runner to execute the command and capture output
     cfg.runner.run_capture(&spec)
