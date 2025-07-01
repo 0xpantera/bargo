@@ -19,7 +19,7 @@ use crate::{backends, commands::common, config::Config};
 /// # Returns
 /// * `Result<()>` - Success or error from Foundry initialization
 pub fn init_foundry_project(cfg: &Config, project_path: &str) -> Result<()> {
-    common::run_foundry_command(cfg, "forge", &["init", "--force", project_path])
+    common::run_tool(cfg, "forge", &["init", "--force", project_path])
 }
 
 /// Initialize Foundry project at the default EVM contracts location
@@ -51,7 +51,7 @@ pub fn init_default_foundry_project(cfg: &Config) -> Result<()> {
 /// # Returns
 /// * `Result<String>` - Contract address or error
 pub fn deploy_contract(
-    _cfg: &Config,
+    cfg: &Config,
     contract_path: &str,
     _contract_name: &str,
     rpc_url: &str,
@@ -72,9 +72,8 @@ pub fn deploy_contract(
         args.extend(constructor_args);
     }
 
-    // TODO: Extend runner interface to capture stdout for contract address parsing
-    // For now, fall back to direct backend call
-    let (stdout, _stderr) = backends::foundry::run_forge_with_output(&args)?;
+    // Use runner to capture stdout for contract address parsing
+    let stdout = common::run_tool_capture(cfg, "forge", &args)?;
 
     // Parse contract address from forge output
     // forge create outputs: "Deployed to: 0x..."
