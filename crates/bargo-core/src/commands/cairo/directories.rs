@@ -4,6 +4,7 @@
 //! specific to the Cairo/Starknet workflow, including artifact organization and project movement.
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use std::path::{Path, PathBuf};
 
 use crate::util::{self, Flavour};
@@ -29,7 +30,12 @@ pub fn ensure_starknet_target_dir() -> Result<()> {
 pub fn ensure_cairo_contracts_dir() -> Result<()> {
     let cairo_dir = Path::new("./contracts/cairo");
     if !cairo_dir.exists() {
-        std::fs::create_dir_all(cairo_dir)?;
+        std::fs::create_dir_all(cairo_dir).wrap_err_with(|| {
+            format!(
+                "creating Cairo contracts directory at {}",
+                cairo_dir.display()
+            )
+        })?;
     }
     Ok(())
 }

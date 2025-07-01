@@ -4,6 +4,7 @@
 //! for Cairo verifier contract generation and proof calldata creation.
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -58,7 +59,8 @@ pub fn generate_calldata(
         .unwrap_or_else(|| PathBuf::from("./target/starknet/calldata.json"));
 
     // Save calldata to file
-    std::fs::write(&calldata_path, stdout.trim())?;
+    std::fs::write(&calldata_path, stdout.trim())
+        .wrap_err_with(|| format!("writing calldata to {}", calldata_path.display()))?;
 
     Ok(calldata_path)
 }
