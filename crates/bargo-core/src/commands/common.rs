@@ -64,21 +64,11 @@ pub fn run_nargo_command(cfg: &Config, base_args: &[&str]) -> Result<()> {
 
     // Use the runner to execute the command (handles dry-run automatically)
     cfg.runner.run(&spec)
-
-    // TODO: Migrate remaining shell-outs to use runner abstraction:
-    // - scarb command executions (currently empty module)
-    // - starknet CLI integrations
-    //
-    // Completed migrations:
-    // ✅ bb command executions
-    // ✅ garaga command executions
-    // ✅ foundry command executions
-    // ✅ nargo command executions
 }
 
-/// Run a garaga command with consolidated argument building, logging, and dry-run handling
+/// Run any external tool with unified command execution
 ///
-/// This is the primary helper for executing garaga commands consistently across all
+/// This is the unified helper for executing external tools consistently across all
 /// command modules. It handles:
 /// - Verbose logging (when enabled and not quiet)
 /// - Dry-run mode (prints command without executing)
@@ -86,95 +76,87 @@ pub fn run_nargo_command(cfg: &Config, base_args: &[&str]) -> Result<()> {
 ///
 /// # Arguments
 /// * `cfg` - The global configuration containing all flags and runner
-/// * `args` - Arguments to pass to garaga
+/// * `tool` - The tool command to run (bb, garaga, forge, cast, nargo, etc.)
+/// * `args` - Arguments to pass to the tool
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from command execution
 ///
 /// # Example
 /// ```ignore
+/// // Execute "bb prove --scheme ultra_honk -b bytecode.json"
+/// run_tool(&config, "bb", &["prove", "--scheme", "ultra_honk", "-b", "bytecode.json"])?;
+///
 /// // Execute "garaga gen --system ultra_starknet_zk_honk --vk ./target/starknet/vk"
-/// run_garaga_command(&config, &["gen", "--system", "ultra_starknet_zk_honk", "--vk", "./target/starknet/vk"])?;
+/// run_tool(&config, "garaga", &["gen", "--system", "ultra_starknet_zk_honk", "--vk", "./target/starknet/vk"])?;
 /// ```
-pub fn run_garaga_command(cfg: &Config, args: &[&str]) -> Result<()> {
+pub fn run_tool(cfg: &Config, tool: &str, args: &[&str]) -> Result<()> {
     let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
     if cfg.verbose && !cfg.quiet {
-        info!("Running: garaga {}", args_vec.join(" "));
+        info!("Running: {} {}", tool, args_vec.join(" "));
     }
 
-    // Create command specification for garaga
-    let spec = CmdSpec::new("garaga".to_string(), args_vec);
+    // Create command specification for the tool
+    let spec = CmdSpec::new(tool.to_string(), args_vec);
 
     // Use the runner to execute the command (handles dry-run automatically)
     cfg.runner.run(&spec)
 }
 
-/// Run a foundry command with consolidated argument building, logging, and dry-run handling
+/// Run any external tool and capture its stdout
 ///
-/// This is the primary helper for executing foundry commands consistently across all
-/// command modules. It handles:
-/// - Verbose logging (when enabled and not quiet)
-/// - Dry-run mode (prints command without executing)
-/// - Command execution via the configured runner
+/// This is the unified helper for executing external tools that need to capture output.
+/// It handles the same features as `run_tool` but returns the stdout as a string.
 ///
 /// # Arguments
 /// * `cfg` - The global configuration containing all flags and runner
-/// * `command` - The foundry command to run (forge, cast, anvil)
-/// * `args` - Arguments to pass to the foundry command
+/// * `tool` - The tool command to run (bb, garaga, forge, cast, nargo, etc.)
+/// * `args` - Arguments to pass to the tool
 ///
 /// # Returns
-/// * `Result<()>` - Success or error from command execution
+/// * `Result<String>` - Stdout from command execution or error
 ///
 /// # Example
 /// ```ignore
-/// // Execute "forge init --force contracts/evm"
-/// run_foundry_command(&config, "forge", &["init", "--force", "contracts/evm"])?;
+/// // Execute "garaga calldata ..." and capture output
+/// let output = run_tool_capture(&config, "garaga", &["calldata", "--system", "ultra_starknet_zk_honk"])?;
 /// ```
-pub fn run_foundry_command(cfg: &Config, command: &str, args: &[&str]) -> Result<()> {
+pub fn run_tool_capture(cfg: &Config, tool: &str, args: &[&str]) -> Result<String> {
     let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
     if cfg.verbose && !cfg.quiet {
-        info!("Running: {} {}", command, args_vec.join(" "));
+        info!(
+            "Running (capturing output): {} {}",
+            tool,
+            args_vec.join(" ")
+        );
     }
 
-    // Create command specification for foundry command
-    let spec = CmdSpec::new(command.to_string(), args_vec);
+    // Create command specification for the tool
+    let spec = CmdSpec::new(tool.to_string(), args_vec);
 
-    // Use the runner to execute the command (handles dry-run automatically)
-    cfg.runner.run(&spec)
+    // Use the runner to execute the command and capture output
+    cfg.runner.run_capture(&spec)
 }
 
-/// Run a bb command with consolidated argument building, logging, and dry-run handling
-///
-/// This is the primary helper for executing bb commands consistently across all
-/// command modules. It handles:
-/// - Verbose logging (when enabled and not quiet)
-/// - Dry-run mode (prints command without executing)
-/// - Command execution via the configured runner
-///
-/// # Arguments
-/// * `cfg` - The global configuration containing all flags and runner
-/// * `args` - Arguments to pass to bb
-///
-/// # Returns
-/// * `Result<()>` - Success or error from command execution
-///
-/// # Example
-/// ```ignore
-/// // Execute "bb prove --scheme ultra_honk -b bytecode.json -w witness.gz"
-/// run_bb_command(&config, &["prove", "--scheme", "ultra_honk", "-b", "bytecode.json", "-w", "witness.gz"])?;
-/// ```
+// Legacy helper functions - these are deprecated and will be removed
+// Use run_tool() and run_tool_capture() instead
+
+/// Legacy bb command helper - use run_tool(cfg, "bb", args) instead
+#[deprecated(note = "Use run_tool(cfg, \"bb\", args) instead")]
 pub fn run_bb_command(cfg: &Config, args: &[&str]) -> Result<()> {
-    let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    run_tool(cfg, "bb", args)
+}
 
-    if cfg.verbose && !cfg.quiet {
-        info!("Running: bb {}", args_vec.join(" "));
-    }
+/// Legacy garaga command helper - use run_tool(cfg, "garaga", args) instead
+#[deprecated(note = "Use run_tool(cfg, \"garaga\", args) instead")]
+pub fn run_garaga_command(cfg: &Config, args: &[&str]) -> Result<()> {
+    run_tool(cfg, "garaga", args)
+}
 
-    // Create command specification for bb
-    let spec = CmdSpec::new("bb".to_string(), args_vec);
-
-    // Use the runner to execute the command (handles dry-run automatically)
-    cfg.runner.run(&spec)
+/// Legacy foundry command helper - use run_tool(cfg, command, args) instead
+#[deprecated(note = "Use run_tool(cfg, command, args) instead")]
+pub fn run_foundry_command(cfg: &Config, command: &str, args: &[&str]) -> Result<()> {
+    run_tool(cfg, command, args)
 }

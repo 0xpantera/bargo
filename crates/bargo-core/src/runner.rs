@@ -131,6 +131,22 @@ pub trait Runner: std::fmt::Debug {
     /// runner.run(&spec)?;
     /// ```
     fn run(&self, spec: &CmdSpec) -> Result<()>;
+
+    /// Execute a command specification and capture its stdout
+    ///
+    /// # Arguments
+    /// * `spec` - Command specification to execute
+    ///
+    /// # Returns
+    /// * `Result<String>` - Stdout from command execution or error
+    ///
+    /// # Example
+    /// ```ignore
+    /// let runner = RealRunner;
+    /// let spec = CmdSpec::new("echo".to_string(), vec!["hello".to_string()]);
+    /// let output = runner.run_capture(&spec)?;
+    /// ```
+    fn run_capture(&self, spec: &CmdSpec) -> Result<String>;
 }
 
 /// Real command runner that actually executes commands
@@ -206,19 +222,81 @@ impl Runner for RealRunner {
 
         Ok(())
     }
+
+    fn run_capture(&self, spec: &CmdSpec) -> Result<String> {
+        let mut cmd = Command::new(&spec.cmd);
+
+        // Add arguments
+        cmd.args(&spec.args);
+
+        // Set working directory if specified
+        if let Some(ref cwd) = spec.cwd {
+            cmd.current_dir(cwd);
+        }
+
+        // Set environment variables
+        for (key, value) in &spec.env {
+            cmd.env(key, value);
+        }
+
+        // Execute the command
+        let output = cmd.output().map_err(|e| {
+            color_eyre::eyre::eyre!("Failed to execute command '{}': {}", spec.cmd, e)
+        })?;
+
+        // Check if command succeeded
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            return Err(color_eyre::eyre::eyre!(
+                "Command '{}' failed with exit code {:?}\nStdout: {}\nStderr: {}",
+                spec.cmd,
+                output.status.code(),
+                stdout,
+                stderr
+            ));
+        }
+
+        // Return stdout as string
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
 }
 
 /// Dry-run command runner that prints commands but doesn't execute them
 ///
 /// This runner prints what commands would be executed without actually running them.
 /// It should be used in dry-run mode to show users what operations would be performed.
+/// It also maintains a history of all commands for testing purposes.
 #[derive(Debug)]
-pub struct DryRunRunner;
+pub struct DryRunRunner {
+    history: std::sync::Mutex<Vec<CmdSpec>>,
+}
 
 impl DryRunRunner {
     /// Create a new dry-run command runner
     pub fn new() -> Self {
-        Self
+        Self {
+            history: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Get the history of all commands that would have been executed
+    ///
+    /// This is useful for testing to verify that the correct commands
+    /// were generated without actually executing them.
+    ///
+    /// # Returns
+    /// * `Vec<CmdSpec>` - List of all command specifications in order
+    pub fn history(&self) -> Vec<CmdSpec> {
+        self.history.lock().unwrap().clone()
+    }
+
+    /// Clear the command history
+    ///
+    /// This is useful for testing when you want to reset between test cases.
+    pub fn clear_history(&self) {
+        self.history.lock().unwrap().clear();
     }
 }
 
@@ -240,6 +318,9 @@ impl Runner for DryRunRunner {
     /// # Returns
     /// * `Result<()>` - Always succeeds unless there's a formatting error
     fn run(&self, spec: &CmdSpec) -> Result<()> {
+        // Record command in history
+        self.history.lock().unwrap().push(spec.clone());
+
         // Build the command string
         let mut cmd_parts = vec![spec.cmd.clone()];
         cmd_parts.extend(spec.args.iter().cloned());
@@ -264,6 +345,30 @@ impl Runner for DryRunRunner {
         }
 
         Ok(())
+    }
+
+    fn run_capture(&self, spec: &CmdSpec) -> Result<String> {
+        // Record command in history
+        self.history.lock().unwrap().push(spec.clone());
+
+        // Build the command string for display
+        let mut cmd_parts = vec![spec.cmd.clone()];
+        cmd_parts.extend(spec.args.iter().cloned());
+        let cmd_str = cmd_parts.join(" ");
+
+        // Print what would be captured
+        if let Some(ref cwd) = spec.cwd {
+            println!(
+                "Would run in directory '{}' (capturing output): {}",
+                cwd.display(),
+                cmd_str
+            );
+        } else {
+            println!("Would run (capturing output): {}", cmd_str);
+        }
+
+        // Return placeholder output for dry-run
+        Ok("<dry-run-output>".to_string())
     }
 }
 
@@ -351,5 +456,89 @@ mod tests {
 
         // This should fail
         assert!(runner.run(&spec).is_err());
+    }
+
+    #[test]
+    fn test_real_runner_run_capture() {
+        let runner = RealRunner::new();
+        let spec = CmdSpec::new("echo".to_string(), vec!["hello world".to_string()]);
+
+        // Echo should capture output successfully
+        let result = runner.run_capture(&spec);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("hello world"));
+    }
+
+    #[test]
+    fn test_dry_run_runner_history() {
+        let runner = DryRunRunner::new();
+
+        // Initially empty
+        assert_eq!(runner.history().len(), 0);
+
+        // Run a few commands
+        let spec1 = CmdSpec::new("echo".to_string(), vec!["test1".to_string()]);
+        let spec2 = CmdSpec::new("ls".to_string(), vec!["-la".to_string()]);
+
+        runner.run(&spec1).unwrap();
+        runner.run(&spec2).unwrap();
+
+        // History should contain both commands
+        let history = runner.history();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].cmd, "echo");
+        assert_eq!(history[0].args, vec!["test1"]);
+        assert_eq!(history[1].cmd, "ls");
+        assert_eq!(history[1].args, vec!["-la"]);
+    }
+
+    #[test]
+    fn test_dry_run_runner_clear_history() {
+        let runner = DryRunRunner::new();
+
+        // Add a command
+        let spec = CmdSpec::new("echo".to_string(), vec!["test".to_string()]);
+        runner.run(&spec).unwrap();
+        assert_eq!(runner.history().len(), 1);
+
+        // Clear history
+        runner.clear_history();
+        assert_eq!(runner.history().len(), 0);
+    }
+
+    #[test]
+    fn test_dry_run_runner_run_capture() {
+        let runner = DryRunRunner::new();
+        let spec = CmdSpec::new("echo".to_string(), vec!["test output".to_string()]);
+
+        // Should return placeholder output
+        let result = runner.run_capture(&spec);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "<dry-run-output>");
+
+        // Should record in history
+        let history = runner.history();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].cmd, "echo");
+        assert_eq!(history[0].args, vec!["test output"]);
+    }
+
+    #[test]
+    fn test_dry_run_runner_mixed_run_and_capture() {
+        let runner = DryRunRunner::new();
+
+        let spec1 = CmdSpec::new("echo".to_string(), vec!["normal".to_string()]);
+        let spec2 = CmdSpec::new("cat".to_string(), vec!["file.txt".to_string()]);
+
+        // Mix normal run and capture
+        runner.run(&spec1).unwrap();
+        runner.run_capture(&spec2).unwrap();
+
+        // Both should be in history
+        let history = runner.history();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].cmd, "echo");
+        assert_eq!(history[1].cmd, "cat");
     }
 }
