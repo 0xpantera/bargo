@@ -42,41 +42,6 @@ pub fn ensure_available() -> Result<()> {
     Ok(())
 }
 
-/// Execute a forge command and capture its output
-pub fn run_forge_with_output(args: &[&str]) -> Result<(String, String)> {
-    // Ensure Foundry is available before running
-    ensure_available()?;
-
-    let output = std::process::Command::new("forge")
-        .args(args)
-        .output()
-        .map_err(|e| {
-            color_eyre::eyre::eyre!(
-                "Failed to execute forge command: {}\n\n\
-                 Troubleshooting:\n\
-                 • Ensure Foundry is properly installed: foundryup\n\
-                 • Check that forge is in your PATH\n\
-                 • Verify .env file has required variables (RPC_URL, PRIVATE_KEY)\n\
-                 • Try running the forge command directly to see more details",
-                e
-            )
-        })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !output.status.success() {
-        return Err(color_eyre::eyre::eyre!(
-            "Forge command failed with exit code: {}\nStdout: {}\nStderr: {}",
-            output.status.code().unwrap_or(-1),
-            stdout,
-            stderr
-        ));
-    }
-
-    Ok((stdout, stderr))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

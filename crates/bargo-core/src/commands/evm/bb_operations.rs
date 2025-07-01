@@ -27,8 +27,9 @@ pub fn generate_evm_proof(cfg: &Config, pkg: &str) -> Result<()> {
     let bytecode = util::get_bytecode_path(pkg, Flavour::Bb);
     let witness = util::get_witness_path(pkg, Flavour::Bb);
 
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &[
             "prove",
             "-b",
@@ -59,8 +60,9 @@ pub fn generate_evm_proof(cfg: &Config, pkg: &str) -> Result<()> {
 pub fn generate_evm_vk(cfg: &Config, pkg: &str) -> Result<()> {
     let bytecode = util::get_bytecode_path(pkg, Flavour::Bb);
 
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &[
             "write_vk",
             "--oracle_hash",
@@ -89,8 +91,9 @@ pub fn verify_evm_proof(cfg: &Config, _pkg: &str) -> Result<()> {
     let vk_path = util::get_vk_path(Flavour::Evm);
     let public_inputs_path = util::get_public_inputs_path(Flavour::Evm);
 
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &[
             "verify",
             "-p",
@@ -135,8 +138,9 @@ pub fn generate_evm_proof_and_vk(cfg: &Config, pkg: &str) -> Result<()> {
 /// # Returns
 /// * `Result<()>` - Success or error from BB execution
 pub fn write_solidity_verifier(cfg: &Config, vk_path: &str, output_path: &str) -> Result<()> {
-    common::run_bb_command(
+    common::run_tool(
         cfg,
+        "bb",
         &["write_solidity_verifier", "-k", vk_path, "-o", output_path],
     )
 }
