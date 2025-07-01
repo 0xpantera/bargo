@@ -4,6 +4,7 @@
 //! the different EVM modules to implement complete workflows for each command.
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use tracing::info;
 
 use crate::{
@@ -291,9 +292,13 @@ pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
     // Save contract address for future commands
     let address_file = std::path::Path::new("target/evm/.bargo_contract_address");
     if let Some(parent) = address_file.parent() {
-        std::fs::create_dir_all(parent).ok();
+        std::fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("creating directory {}", parent.display()))
+            .ok();
     }
-    std::fs::write(address_file, &contract_address).ok();
+    std::fs::write(address_file, &contract_address)
+        .wrap_err_with(|| format!("writing contract address to {}", address_file.display()))
+        .ok();
 
     if !cfg.quiet {
         println!(
@@ -359,12 +364,12 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
 
     // Read proof fields and format for contract call
     let proof_fields_content = std::fs::read_to_string(&proof_fields_path)
-        .map_err(|e| color_eyre::eyre::eyre!("Failed to read proof fields file: {}", e))?;
+        .wrap_err_with(|| format!("reading proof fields file {}", proof_fields_path.display()))?;
 
     // Save formatted calldata
     let calldata_path = std::path::PathBuf::from("./target/evm/calldata.json");
     std::fs::write(&calldata_path, &proof_fields_content)
-        .map_err(|e| color_eyre::eyre::eyre!("Failed to write calldata file: {}", e))?;
+        .wrap_err_with(|| format!("writing calldata to {}", calldata_path.display()))?;
 
     if !cfg.quiet {
         let calldata_timer = Timer::start();
@@ -407,7 +412,9 @@ pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
     }
 
     // Get contract address from saved file or environment
-    let contract_address = match std::fs::read_to_string("target/evm/.bargo_contract_address") {
+    let contract_address = match std::fs::read_to_string("target/evm/.bargo_contract_address")
+        .wrap_err("reading saved contract address from target/evm/.bargo_contract_address")
+    {
         Ok(saved_address) => saved_address.trim().to_string(),
         Err(_) => std::env::var("CONTRACT_ADDRESS").map_err(|_| {
             create_smart_error(
@@ -458,7 +465,7 @@ pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
 
     // Read calldata for verification
     let calldata_content = std::fs::read_to_string(&calldata_path)
-        .map_err(|e| color_eyre::eyre::eyre!("Failed to read calldata file: {}", e))?;
+        .wrap_err_with(|| format!("reading calldata file {}", calldata_path.display()))?;
 
     if cfg.verbose {
         info!("Using calldata: {}", calldata_content.trim());

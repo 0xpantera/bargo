@@ -4,6 +4,7 @@
 //! specific to the EVM workflow, including artifact organization and project movement.
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use std::path::{Path, PathBuf};
 
 use crate::util::{self, Flavour};
@@ -29,7 +30,9 @@ pub fn ensure_evm_target_dir() -> Result<()> {
 pub fn ensure_evm_contracts_dir() -> Result<()> {
     let evm_dir = Path::new("./contracts/evm");
     if !evm_dir.exists() {
-        std::fs::create_dir_all(evm_dir)?;
+        std::fs::create_dir_all(evm_dir).wrap_err_with(|| {
+            format!("creating EVM contracts directory at {}", evm_dir.display())
+        })?;
     }
     Ok(())
 }
@@ -43,7 +46,12 @@ pub fn ensure_evm_contracts_dir() -> Result<()> {
 pub fn ensure_evm_contracts_src_dir() -> Result<()> {
     let src_dir = Path::new("./contracts/evm/src");
     if !src_dir.exists() {
-        std::fs::create_dir_all(src_dir)?;
+        std::fs::create_dir_all(src_dir).wrap_err_with(|| {
+            format!(
+                "creating EVM contracts source directory at {}",
+                src_dir.display()
+            )
+        })?;
     }
     Ok(())
 }
