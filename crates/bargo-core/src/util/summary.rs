@@ -1,4 +1,4 @@
-use super::output::{colorize, colors};
+use super::log::{colorize, colors};
 
 /// Print operation summary with colored output
 pub struct OperationSummary {

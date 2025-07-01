@@ -3,8 +3,6 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
-use crate::util::create_smart_error;
-
 /// Backend flavour for artifact generation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavour {
@@ -177,30 +175,7 @@ pub fn organize_build_artifacts(pkg_name: &str, flavour: Flavour) -> Result<()> 
     Ok(())
 }
 
-/// Validate that required files exist for a given operation
-pub fn validate_files_exist<P: AsRef<Path>>(files: &[P]) -> Result<()> {
-    let mut missing_files = Vec::new();
-
-    for file_path in files {
-        if !file_path.as_ref().exists() {
-            missing_files.push(file_path.as_ref().display().to_string());
-        }
-    }
-
-    if !missing_files.is_empty() {
-        return Err(create_smart_error(
-            &format!("Required files are missing: {}", missing_files.join(", ")),
-            &[
-                "Run 'bargo build' to generate bytecode and witness files",
-                "Ensure the previous workflow steps completed successfully",
-                "Check that you're running from the correct directory",
-                "Verify the package name is correct",
-            ],
-        ));
-    }
-
-    Ok(())
-}
+// validate_files_exist function moved to util::io module
 
 /// Simplified Nargo.toml configuration structure
 #[derive(Debug, Deserialize)]

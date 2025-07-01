@@ -1,16 +1,18 @@
-pub mod directories;
 pub mod error;
-pub mod output;
+pub mod format;
+pub mod io;
+pub mod log;
 pub mod paths;
-pub mod rebuild;
 pub mod summary;
 pub mod timer;
 
-pub use directories::*;
 pub use error::*;
-pub use output::*;
+pub use format::*;
+pub use io::*;
+pub use log::*;
+
 pub use paths::*;
-pub use rebuild::*;
+
 pub use summary::*;
 pub use timer::*;
 
