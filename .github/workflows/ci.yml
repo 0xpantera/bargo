@@ -45,6 +45,30 @@ jobs:
       - name: cargo clippy (deny warnings)
         run: cargo clippy --workspace --all-features --locked -- -D warnings
 
-      # -- Step 6: Run the test suite
+      # -- Step 6: Install Foundry for EVM tests
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | bash
+          source ~/.bashrc
+          foundryup
+          echo "$HOME/.foundry/bin" >> $GITHUB_PATH
+
+      # -- Step 7: Install nargo for Noir compilation
+      - name: Install nargo
+        run: |
+          curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+          source ~/.bashrc
+          noirup
+          echo "$HOME/.nargo/bin" >> $GITHUB_PATH
+
+      # -- Step 8: Install bb for proof generation
+      - name: Install bb
+        run: |
+          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/master/barretenberg/bbup/install | bash
+          source ~/.bashrc
+          bbup
+          echo "$HOME/.bb/bin" >> $GITHUB_PATH
+
+      # -- Step 9: Run the test suite
       - name: cargo test
         run: cargo test --workspace --all-features --locked

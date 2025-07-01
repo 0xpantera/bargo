@@ -7,35 +7,75 @@ use assert_fs::TempDir;
 use bargo_core::config::Config;
 use bargo_core::runner::DryRunRunner;
 use path_slash::PathExt;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-/// A thread-safe scoped directory changer that restores the original directory on drop
-/// This prevents race conditions when tests run in parallel
-struct ScopedDir {
-    _original: PathBuf,
+// Global lock to prevent concurrent directory operations across all tests
+static DIRECTORY_LOCK: Mutex<()> = Mutex::new(());
+
+/// Temporary helper functions for Cairo commands until working directory API is implemented
+fn run_cairo_prove_in_directory(
+    config: &Config,
+    project_dir: &Path,
+) -> Result<(), color_eyre::eyre::Error> {
+    // Use global lock to prevent race conditions
+    let _lock = DIRECTORY_LOCK.lock().unwrap();
+
+    // Validate project directory exists before proceeding
+    if !project_dir.exists() {
+        return Err(color_eyre::eyre::eyre!(
+            "Project directory does not exist: {}",
+            project_dir.display()
+        ));
+    }
+
+    // Get current directory before changing it
+    let original_dir = std::env::current_dir()
+        .map_err(|e| color_eyre::eyre::eyre!("Failed to get current directory: {}", e))?;
+
+    // Change to project directory
+    std::env::set_current_dir(project_dir)
+        .map_err(|e| color_eyre::eyre::eyre!("Failed to change to project directory: {}", e))?;
+
+    let result = bargo_core::commands::cairo::run_prove(config);
+
+    // Always restore directory, even on error
+    let _ = std::env::set_current_dir(original_dir);
+
+    result
 }
 
-impl ScopedDir {
-    /// Change to the specified directory and return a guard that will restore the original directory
-    fn new(new_dir: &Path) -> std::io::Result<Self> {
-        static DIR_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = DIR_LOCK.lock().unwrap();
+fn run_cairo_gen_in_directory(
+    config: &Config,
+    project_dir: &Path,
+) -> Result<(), color_eyre::eyre::Error> {
+    // Use global lock to prevent race conditions
+    let _lock = DIRECTORY_LOCK.lock().unwrap();
 
-        let original = std::env::current_dir()?;
-        std::env::set_current_dir(new_dir)?;
-
-        Ok(ScopedDir {
-            _original: original,
-        })
+    // Validate project directory exists before proceeding
+    if !project_dir.exists() {
+        return Err(color_eyre::eyre::eyre!(
+            "Project directory does not exist: {}",
+            project_dir.display()
+        ));
     }
-}
 
-impl Drop for ScopedDir {
-    fn drop(&mut self) {
-        let _ = std::env::set_current_dir(&self._original);
-    }
+    // Get current directory before changing it
+    let original_dir = std::env::current_dir()
+        .map_err(|e| color_eyre::eyre::eyre!("Failed to get current directory: {}", e))?;
+
+    // Change to project directory
+    std::env::set_current_dir(project_dir)
+        .map_err(|e| color_eyre::eyre::eyre!("Failed to change to project directory: {}", e))?;
+
+    let result = bargo_core::commands::cairo::run_gen(config);
+
+    // Always restore directory, even on error
+    let _ = std::env::set_current_dir(original_dir);
+
+    result
 }
 
 /// Copy a fixture directory to a temporary location
@@ -104,11 +144,8 @@ fn test_cairo_prove_command_dry_run() {
         runner: dry_runner.clone(),
     };
 
-    // Run cairo prove command in the project directory using scoped directory change
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::cairo::run_prove(&config)
-    };
+    // Run cairo prove command in the project directory using working directory API
+    let result = run_cairo_prove_in_directory(&config, &project_dir);
 
     // The command should succeed in dry run mode
     assert!(
@@ -181,10 +218,7 @@ fn test_cairo_prove_with_package_override() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::cairo::run_prove(&config)
-    };
+    let result = run_cairo_prove_in_directory(&config, &project_dir);
 
     assert!(
         result.is_ok(),
@@ -225,10 +259,7 @@ fn test_cairo_prove_verbose_mode() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::cairo::run_prove(&config)
-    };
+    let result = run_cairo_prove_in_directory(&config, &project_dir);
 
     assert!(
         result.is_ok(),
@@ -263,11 +294,8 @@ fn test_cairo_gen_command_dry_run() {
         runner: dry_runner.clone(),
     };
 
-    // Test cairo gen command using scoped directory change
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::cairo::run_gen(&config)
-    };
+    // Test cairo gen command using working directory API
+    let result = run_cairo_gen_in_directory(&config, &project_dir);
 
     // Should succeed or gracefully handle missing dependencies
     if result.is_ok() {
@@ -320,10 +348,7 @@ fn test_cairo_workflow_file_path_normalization() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::cairo::run_prove(&config)
-    };
+    let result = run_cairo_prove_in_directory(&config, &project_dir);
 
     assert!(result.is_ok(), "Cairo prove failed: {:?}", result.err());
 
@@ -386,10 +411,7 @@ fn test_cairo_commands_require_build_artifacts() {
         runner: dry_runner.clone(),
     };
 
-    let result = {
-        let _scoped_dir = ScopedDir::new(&project_dir).unwrap();
-        bargo_core::commands::cairo::run_prove(&config)
-    };
+    let result = run_cairo_prove_in_directory(&config, &project_dir);
 
     // Should fail or provide helpful error about missing build artifacts
     if result.is_err() {

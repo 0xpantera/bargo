@@ -50,12 +50,12 @@ pub fn colorize(text: &str, color: &str) -> String {
 
 /// Create success message with green color
 pub fn success(text: &str) -> String {
-    colorize(&format!("✅ {}", text), colors::BRIGHT_GREEN)
+    colorize(&format!("✅ {text}"), colors::BRIGHT_GREEN)
 }
 
 /// Create info message with blue color
 pub fn info(text: &str) -> String {
-    colorize(&format!("ℹ️ {}", text), colors::BRIGHT_BLUE)
+    colorize(&format!("ℹ️ {text}"), colors::BRIGHT_BLUE)
 }
 
 /// Print ASCII art banners for different operations

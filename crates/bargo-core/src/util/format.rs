@@ -42,7 +42,7 @@ pub fn format_file_size(path: &Path) -> String {
         Ok(metadata) => {
             let size = metadata.len();
             if size < 1024 {
-                format!("{} B", size)
+                format!("{size} B")
             } else if size < 1024 * 1024 {
                 format!("{:.1} KB", size as f64 / 1024.0)
             } else {
