@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test cases for check, clean, rebuild, cairo gen, and evm gen commands
 - Test coverage for verbose, dry-run, and package flag combinations
 - Comprehensive rustdoc documentation for new helper functions
+- Integration test framework with golden file snapshots for `bargo build` and `cairo prove` workflows
+- Cross-platform path handling in integration tests using `path-slash` crate
+- Thread-safe test execution with `ScopedDir` guard to prevent parallel test race conditions
+- Fixture-based testing with `simple_circuit` test project in `tests/fixtures/`
+- Golden snapshot comparison for build artifacts in `tests/goldens/` directory
+- `DryRunRunner`-based integration tests that verify command execution without running external tools
 
 ### Changed
 - Command execution now uses runner abstraction for consistent dry-run and real execution modes
@@ -48,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool-specific command helpers (replaced with unified `run_tool()` interface)
 - Enhanced global flag propagation consistency across all commands
 - Deprecated helper functions: `run_bb_command()`, `run_garaga_command()`, `run_foundry_command()`
+- Legacy `tests/integration.rs` single-file integration test (replaced with modular `tests/*_integration.rs` files)
 - All commands now properly honor --pkg, --verbose, --dry-run, and --quiet flags
 
 ### Fixed
