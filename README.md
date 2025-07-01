@@ -269,6 +269,118 @@ contracts/
 └── cairo/        # Cairo verifier project
 ```
 
+## Errors
+
+bargo provides rich error context to help you understand and fix issues quickly. All errors include:
+
+- **Clear descriptions** of what went wrong
+- **Contextual information** about the operation that failed
+- **Actionable suggestions** for how to fix the problem
+- **Error chains** that show the full path from root cause to symptom
+
+### Error Categories
+
+#### Project Configuration Errors
+```
+Error: Could not find Nargo.toml in current directory or any parent directory.
+       Make sure you're running bargo from within a Noir project.
+```
+
+**Solution**: Navigate to your Noir project directory or create a new project with `nargo new <project_name>`.
+
+#### Missing Dependencies
+```
+Error: Tool 'nargo' not found in PATH
+       
+Suggestions:
+• Install nargo: curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+• Add nargo to your PATH
+• Verify installation with `nargo --version`
+```
+
+**Solution**: Install the missing tool following the suggestions in the error message.
+
+#### Missing Artifacts
+```
+Error: Required files are missing: target/bb/example.json, target/bb/example.gz
+
+Suggestions:
+• Run 'bargo build' to generate bytecode and witness files
+• Ensure the previous workflow steps completed successfully
+• Check that you're running from the correct directory
+```
+
+**Solution**: Run the suggested command to generate the missing files.
+
+#### Tool Execution Failures
+```
+Error: Command execution failed: bb prove --scheme ultra_honk
+   0: Command 'bb' failed with exit code 1
+      Stdout: 
+      Stderr: Error: Could not parse bytecode file
+```
+
+**Solution**: Check that your circuit compiles correctly with `bargo check` and that all input files are valid.
+
+### Backend-Specific Errors
+
+#### Cairo Backend Errors
+- **Deploy failures**: Issues with Starknet contract deployment
+- **Class hash errors**: Problems with contract declaration
+- **Garaga integration**: Tool-specific failures during contract generation
+
+#### EVM Backend Errors  
+- **Foundry integration**: Issues with Solidity compilation or deployment
+- **Network errors**: Problems connecting to Ethereum networks
+- **Contract compilation**: Solidity verifier generation failures
+
+### Debugging Tips
+
+1. **Use `--verbose` flag**: See exactly which commands are being executed
+   ```bash
+   bargo --verbose evm prove
+   ```
+
+2. **Check tool versions**: Ensure all dependencies are installed and compatible
+   ```bash
+   bargo doctor
+   ```
+
+3. **Use `--dry-run` flag**: See what commands would be executed without running them
+   ```bash
+   bargo --dry-run cairo deploy
+   ```
+
+4. **Clean and rebuild**: Start fresh if you encounter unexpected errors
+   ```bash
+   bargo clean
+   bargo build
+   ```
+
+5. **Check environment configuration**: Verify `.env` and `.secrets` files are properly configured
+
+### Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| "nargo not found" | Install Noir toolchain: `curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash` |
+| "bb not found" | Install Barretenberg: Follow Aztec installation docs |
+| "garaga not found" | Install with pip: `pip install garaga==0.18.1` |
+| "forge not found" | Install Foundry: `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
+| Version compatibility issues | Use `bargo doctor` to check versions and compatibility |
+| Missing artifacts | Run prerequisite commands: `bargo build` → `bargo <backend> prove` |
+| Network connection issues | Check RPC URLs and network configuration in `.env` |
+
+### Getting Help
+
+If you encounter an error not covered here:
+
+1. Check the error message for specific suggestions
+2. Run `bargo doctor` to verify your setup
+3. Use `--verbose` to see detailed command execution
+4. Search existing GitHub issues
+5. Open a new issue with the full error output and your configuration
+
 ## Contributing
 
 1. Fork the repository
