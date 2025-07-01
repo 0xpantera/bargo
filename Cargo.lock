@@ -132,6 +132,7 @@ dependencies = [
  "bargo-core",
  "color-eyre",
  "predicates",
+ "serde_json",
  "tempfile",
 ]
 
