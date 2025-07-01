@@ -25,6 +25,7 @@
 //! ```
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use std::path::Path;
 use tracing::debug;
 
@@ -158,14 +159,38 @@ pub fn needs_rebuild_from_path(pkg_name: &str, start_path: &Path) -> Result<bool
     }
 
     // Get the oldest target file time
-    let bytecode_time = std::fs::metadata(&bytecode_path)?.modified()?;
-    let witness_time = std::fs::metadata(&witness_path)?.modified()?;
+    let bytecode_time = std::fs::metadata(&bytecode_path)
+        .wrap_err_with(|| {
+            format!(
+                "reading metadata for bytecode file {}",
+                bytecode_path.display()
+            )
+        })?
+        .modified()
+        .wrap_err("getting modification time for bytecode file")?;
+    let witness_time = std::fs::metadata(&witness_path)
+        .wrap_err_with(|| {
+            format!(
+                "reading metadata for witness file {}",
+                witness_path.display()
+            )
+        })?
+        .modified()
+        .wrap_err("getting modification time for witness file")?;
     let target_time = bytecode_time.min(witness_time);
 
     // Check Nargo.toml modification time
     let nargo_toml = project_root.join("Nargo.toml");
     if nargo_toml.exists() {
-        let nargo_time = std::fs::metadata(&nargo_toml)?.modified()?;
+        let nargo_time = std::fs::metadata(&nargo_toml)
+            .wrap_err_with(|| {
+                format!(
+                    "reading metadata for Nargo.toml at {}",
+                    nargo_toml.display()
+                )
+            })?
+            .modified()
+            .wrap_err("getting modification time for Nargo.toml")?;
         if nargo_time > target_time {
             debug!("Nargo.toml is newer than target files, rebuild needed");
             return Ok(true);
@@ -175,7 +200,15 @@ pub fn needs_rebuild_from_path(pkg_name: &str, start_path: &Path) -> Result<bool
     // Check Prover.toml modification time (contains circuit inputs)
     let prover_toml = project_root.join("Prover.toml");
     if prover_toml.exists() {
-        let prover_time = std::fs::metadata(&prover_toml)?.modified()?;
+        let prover_time = std::fs::metadata(&prover_toml)
+            .wrap_err_with(|| {
+                format!(
+                    "reading metadata for Prover.toml at {}",
+                    prover_toml.display()
+                )
+            })?
+            .modified()
+            .wrap_err("getting modification time for Prover.toml")?;
         if prover_time > target_time {
             debug!("Prover.toml is newer than target files, rebuild needed");
             return Ok(true);
@@ -195,12 +228,18 @@ pub fn needs_rebuild_from_path(pkg_name: &str, start_path: &Path) -> Result<bool
 
 /// Recursively check if any file in a directory is newer than the given time
 fn is_dir_newer_than(dir: &Path, target_time: std::time::SystemTime) -> Result<bool> {
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
+    for entry in
+        std::fs::read_dir(dir).wrap_err_with(|| format!("reading directory {}", dir.display()))?
+    {
+        let entry =
+            entry.wrap_err_with(|| format!("reading directory entry in {}", dir.display()))?;
         let path = entry.path();
 
         if path.is_file() {
-            let file_time = std::fs::metadata(&path)?.modified()?;
+            let file_time = std::fs::metadata(&path)
+                .wrap_err_with(|| format!("reading metadata for file {}", path.display()))?
+                .modified()
+                .wrap_err("getting modification time for file")?;
             if file_time > target_time {
                 return Ok(true);
             }
@@ -208,7 +247,6 @@ fn is_dir_newer_than(dir: &Path, target_time: std::time::SystemTime) -> Result<b
             return Ok(true);
         }
     }
-
     Ok(false)
 }
 
@@ -221,19 +259,16 @@ fn is_dir_newer_than(dir: &Path, target_time: std::time::SystemTime) -> Result<b
 pub fn ensure_target_dir(flavour: crate::util::Flavour) -> Result<()> {
     let target_path = crate::util::paths::target_dir(flavour);
 
-    std::fs::create_dir_all(&target_path).map_err(|e| {
+    std::fs::create_dir_all(&target_path).wrap_err_with(|| {
         let flavour_name = match flavour {
             crate::util::Flavour::Bb => "bb",
             crate::util::Flavour::Evm => "evm",
             crate::util::Flavour::Starknet => "starknet",
         };
-        crate::util::error::create_smart_error(
-            &format!("Failed to create target/{} directory: {}", flavour_name, e),
-            &[
-                "Check directory permissions",
-                "Ensure you have write access to the current directory",
-                "Verify you're running from the project root",
-            ],
+        format!(
+            "creating target/{} directory at {}",
+            flavour_name,
+            target_path.display()
         )
     })?;
 
@@ -248,14 +283,10 @@ pub fn ensure_target_dir(flavour: crate::util::Flavour) -> Result<()> {
 pub fn ensure_contracts_dir() -> Result<()> {
     let contracts_path = Path::new("./contracts");
 
-    std::fs::create_dir_all(contracts_path).map_err(|e| {
-        crate::util::error::create_smart_error(
-            &format!("Failed to create contracts directory: {}", e),
-            &[
-                "Check directory permissions",
-                "Ensure you have write access to the current directory",
-                "Verify you're running from the project root",
-            ],
+    std::fs::create_dir_all(contracts_path).wrap_err_with(|| {
+        format!(
+            "creating contracts directory at {}",
+            contracts_path.display()
         )
     })?;
 
@@ -281,29 +312,18 @@ pub fn move_generated_project(from: &str, to: &str) -> Result<()> {
     let dest_path = Path::new(to);
 
     if !source_path.exists() {
-        return Err(crate::util::error::create_smart_error(
-            &format!("Source directory does not exist: {}", from),
-            &[
-                "Check that the source directory was created correctly",
-                "Verify the path is correct",
-                "Ensure the previous generation step completed successfully",
-            ],
-        ));
+        return Err(
+            color_eyre::eyre::eyre!("Source directory does not exist: {}", from)
+                .wrap_err("validating source directory for move operation"),
+        );
     }
 
     // Remove destination directory if it exists
     if dest_path.exists() {
-        std::fs::remove_dir_all(dest_path).map_err(|e| {
-            crate::util::error::create_smart_error(
-                &format!(
-                    "Failed to remove existing destination directory {}: {}",
-                    to, e
-                ),
-                &[
-                    "Check directory permissions",
-                    "Ensure no processes are using files in the directory",
-                    "Verify you have write access",
-                ],
+        std::fs::remove_dir_all(dest_path).wrap_err_with(|| {
+            format!(
+                "removing existing destination directory {}",
+                dest_path.display()
             )
         })?;
         debug!("Removed existing destination: {}", dest_path.display());
@@ -311,27 +331,16 @@ pub fn move_generated_project(from: &str, to: &str) -> Result<()> {
 
     // Create parent directory of destination if needed
     if let Some(parent) = dest_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            crate::util::error::create_smart_error(
-                &format!("Failed to create parent directory for {}: {}", to, e),
-                &[
-                    "Check directory permissions",
-                    "Ensure you have write access to the parent directory",
-                ],
-            )
-        })?;
+        std::fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("creating parent directory for {}", dest_path.display()))?;
     }
 
     // Move the directory
-    std::fs::rename(source_path, dest_path).map_err(|e| {
-        crate::util::error::create_smart_error(
-            &format!("Failed to move directory from {} to {}: {}", from, to, e),
-            &[
-                "Check directory permissions",
-                "Ensure you have write access to both source and destination",
-                "Verify both paths are on the same filesystem",
-                "Check that no processes are using files in the source directory",
-            ],
+    std::fs::rename(source_path, dest_path).wrap_err_with(|| {
+        format!(
+            "moving directory from {} to {}",
+            source_path.display(),
+            dest_path.display()
         )
     })?;
 
