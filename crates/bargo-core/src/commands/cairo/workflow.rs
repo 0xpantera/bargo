@@ -4,6 +4,7 @@
 //! the different Cairo modules to implement complete workflows for each command.
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use tracing::info;
 
 use crate::{
@@ -333,7 +334,9 @@ pub fn run_deploy(cfg: &Config, class_hash: Option<&str>) -> Result<()> {
         Some(hash) => hash.to_string(),
         None => {
             // Try to read class hash from file saved by declare command
-            match std::fs::read_to_string("target/starknet/.bargo_class_hash") {
+            match std::fs::read_to_string("target/starknet/.bargo_class_hash")
+                .wrap_err("reading saved class hash from target/starknet/.bargo_class_hash")
+            {
                 Ok(saved_hash) => saved_hash.trim().to_string(),
                 Err(_) => {
                     return Err(create_smart_error(
@@ -375,7 +378,9 @@ pub fn run_verify_onchain(cfg: &Config, address: Option<&str>) -> Result<()> {
         Some(addr) => addr.to_string(),
         None => {
             // Try to read contract address from file saved by deploy command
-            match std::fs::read_to_string("target/starknet/.bargo_contract_address") {
+            match std::fs::read_to_string("target/starknet/.bargo_contract_address").wrap_err(
+                "reading saved contract address from target/starknet/.bargo_contract_address",
+            ) {
                 Ok(saved_address) => saved_address.trim().to_string(),
                 Err(_) => {
                     return Err(create_smart_error(

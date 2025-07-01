@@ -6,12 +6,16 @@
 pub mod backend;
 pub mod bb_operations;
 pub mod directories;
+pub mod error;
 pub mod garaga;
 pub mod scarb;
 pub mod workflow;
 
 // Re-export main workflow functions for use by main.rs
 pub use workflow::{run_calldata, run_deploy, run_gen, run_prove, run_verify, run_verify_onchain};
+
+// Re-export error types for convenience
+pub use error::{CairoError, Result};
 
 // Re-export utility functions that may be needed elsewhere
 // (Currently none are needed externally, but modules are available for import)

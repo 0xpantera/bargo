@@ -4,6 +4,7 @@
 //! wrapping the existing Cairo workflow functions to provide a unified interface.
 
 use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 
 use crate::{
     backend::{Backend, BackendConfig},
@@ -78,6 +79,12 @@ impl Backend for CairoBackend {
             let class_hash_file = std::path::PathBuf::from("target/starknet/.bargo_class_hash");
             let class_hash_exists = class_hash_file.exists()
                 && std::fs::read_to_string(&class_hash_file)
+                    .wrap_err_with(|| {
+                        format!(
+                            "reading saved class hash from {}",
+                            class_hash_file.display()
+                        )
+                    })
                     .map(|s| !s.trim().is_empty())
                     .unwrap_or(false);
 
