@@ -7,11 +7,16 @@ pub mod backend;
 pub mod bb_operations;
 pub mod directories;
 pub mod error;
-pub mod foundry;
 pub mod workflow;
 
+#[cfg(feature = "evm-foundry")]
+pub mod foundry;
+
 // Re-export main workflow functions for use by main.rs
-pub use workflow::{run_calldata, run_deploy, run_gen, run_prove, run_verify, run_verify_onchain};
+pub use workflow::{run_calldata, run_gen, run_prove, run_verify};
+
+#[cfg(feature = "evm-foundry")]
+pub use workflow::{run_deploy, run_verify_onchain};
 
 // Re-export error types for convenience
 pub use error::{EvmError, Result};

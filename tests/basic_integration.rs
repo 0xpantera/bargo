@@ -95,7 +95,10 @@ fn test_bargo_help() {
     assert!(stdout.contains("bargo consolidates nargo"));
     assert!(stdout.contains("Commands:"));
     assert!(stdout.contains("build"));
+    #[cfg(feature = "cairo")]
     assert!(stdout.contains("cairo"));
+    #[cfg(not(feature = "cairo"))]
+    assert!(!stdout.contains("cairo"));
     assert!(stdout.contains("evm"));
     assert!(stdout.contains("check"));
     assert!(stdout.contains("clean"));
@@ -162,9 +165,13 @@ fn test_evm_help() {
     assert!(stdout.contains("prove"));
     assert!(stdout.contains("verify"));
     assert!(stdout.contains("gen"));
+    #[cfg(feature = "evm-foundry")]
     assert!(stdout.contains("deploy"));
+    #[cfg(not(feature = "evm-foundry"))]
+    assert!(!stdout.contains("deploy"));
 }
 
+#[cfg(feature = "cairo")]
 #[test]
 fn test_cairo_help() {
     let output = run_bargo_global(&["cairo", "--help"]);
@@ -263,6 +270,7 @@ fn test_evm_prove_dry_run() {
     }
 }
 
+#[cfg(feature = "cairo")]
 #[test]
 fn test_cairo_prove_dry_run() {
     let (_temp_dir, project_dir) = create_test_project();

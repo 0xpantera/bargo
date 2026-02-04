@@ -1,3 +1,4 @@
+#![cfg(feature = "cairo")]
 //! Integration tests for bargo cairo commands
 //!
 //! These tests use DryRunRunner to verify cairo workflow execution without running external tools,

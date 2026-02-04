@@ -10,6 +10,9 @@ use crate::{
     config::Config,
 };
 
+#[cfg(not(feature = "evm-foundry"))]
+use crate::util::create_smart_error;
+
 use super::workflow;
 
 /// EVM backend implementation for Ethereum-based proof systems
@@ -45,6 +48,7 @@ impl Backend for EvmBackend {
     }
 
     /// Deploy Solidity verifier contract to EVM network
+    #[cfg(feature = "evm-foundry")]
     fn deploy(&mut self, cfg: &Config, network: Option<&str>) -> Result<()> {
         // Use provided network or default to "sepolia"
         let network_str = network.unwrap_or("sepolia");
@@ -52,9 +56,34 @@ impl Backend for EvmBackend {
     }
 
     /// Verify proof on-chain using deployed EVM verifier
+    #[cfg(feature = "evm-foundry")]
     fn verify_onchain(&mut self, cfg: &Config, _address: Option<&str>) -> Result<()> {
         // EVM verify_onchain doesn't take an address parameter in the current implementation
         workflow::run_verify_onchain(cfg)
+    }
+
+    /// Deploy Solidity verifier contract to EVM network
+    #[cfg(not(feature = "evm-foundry"))]
+    fn deploy(&mut self, _cfg: &Config, _network: Option<&str>) -> Result<()> {
+        Err(create_smart_error(
+            "EVM deployment is not available in this build",
+            &[
+                "Rebuild with the evm-foundry feature enabled to use deploy commands",
+                "Example: cargo build --features evm-foundry",
+            ],
+        ))
+    }
+
+    /// Verify proof on-chain using deployed EVM verifier
+    #[cfg(not(feature = "evm-foundry"))]
+    fn verify_onchain(&mut self, _cfg: &Config, _address: Option<&str>) -> Result<()> {
+        Err(create_smart_error(
+            "EVM on-chain verification is not available in this build",
+            &[
+                "Rebuild with the evm-foundry feature enabled to use verify-onchain",
+                "Example: cargo build --features evm-foundry",
+            ],
+        ))
     }
 
     /// Configure backend with backend-specific settings

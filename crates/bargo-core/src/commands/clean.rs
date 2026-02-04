@@ -44,6 +44,7 @@ pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
                 println!("{}", info_msg("target/bb/ already clean"));
             }
         }
+        #[cfg(feature = "cairo")]
         Backend::Starknet => {
             if cfg.dry_run {
                 println!("Would run: rm -rf target/starknet/");

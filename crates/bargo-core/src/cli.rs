@@ -56,13 +56,14 @@ pub enum Commands {
     },
 
     /// Cairo/Starknet operations
+    #[cfg(feature = "cairo")]
     #[command(about = "Generate Cairo verifiers and interact with Starknet")]
     Cairo {
         #[command(subcommand)]
         command: CairoCommands,
     },
 
-    /// EVM/Foundry operations
+    /// EVM operations
     #[command(about = "Generate Solidity verifiers and interact with EVM networks")]
     Evm {
         #[command(subcommand)]
@@ -74,6 +75,7 @@ pub enum Commands {
     Doctor,
 }
 
+#[cfg(feature = "cairo")]
 #[derive(Subcommand)]
 pub enum CairoCommands {
     /// Generate Cairo verifier contract
@@ -117,8 +119,8 @@ pub enum CairoCommands {
 
 #[derive(Subcommand)]
 pub enum EvmCommands {
-    /// Generate Solidity verifier contract and Foundry project
-    #[command(about = "Generate Solidity verifier contract with complete Foundry project setup")]
+    /// Generate Solidity verifier contract
+    #[command(about = "Generate Solidity verifier contract (Foundry project setup when enabled)")]
     Gen,
 
     /// Generate Keccak oracle proof
@@ -130,6 +132,7 @@ pub enum EvmCommands {
     Verify,
 
     /// Deploy verifier contract to EVM network
+    #[cfg(feature = "evm-foundry")]
     #[command(about = "Deploy verifier contract using Foundry")]
     Deploy {
         /// Network to deploy to (mainnet or sepolia)
@@ -138,10 +141,11 @@ pub enum EvmCommands {
     },
 
     /// Generate calldata for proof verification
-    #[command(about = "Generate calldata for proof verification using cast")]
+    #[command(about = "Generate calldata for proof verification")]
     Calldata,
 
     /// Verify proof on-chain
+    #[cfg(feature = "evm-foundry")]
     #[command(about = "Verify proof on EVM network using deployed verifier")]
     VerifyOnchain,
 }
@@ -151,6 +155,7 @@ pub enum Backend {
     /// Barretenberg backend (EVM/Solidity)
     Bb,
     /// Starknet backend (Cairo)
+    #[cfg(feature = "cairo")]
     Starknet,
     /// All backends
     All,

@@ -9,7 +9,9 @@
 //! Legacy direct command execution functions have been removed.
 
 pub mod bb;
+#[cfg(feature = "evm-foundry")]
 pub mod foundry;
+#[cfg(feature = "cairo")]
 pub mod garaga;
 pub mod nargo;
 

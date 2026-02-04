@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
 /// Backend flavour for artifact generation
+#[cfg_attr(not(feature = "cairo"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavour {
     /// Barretenberg backend (shared base artifacts)
