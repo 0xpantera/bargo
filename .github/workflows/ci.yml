@@ -47,11 +47,7 @@ jobs:
 
       # -- Step 6: Install Foundry for EVM tests
       - name: Install Foundry
-        run: |
-          curl -L https://foundry.paradigm.xyz | bash
-          export PATH="$HOME/.foundry/bin:$PATH"
-          foundryup
-          echo "$HOME/.foundry/bin" >> $GITHUB_PATH
+        uses: foundry-rs/foundry-toolchain@v1
 
       # -- Step 7: Install nargo for Noir compilation
       - name: Install nargo
