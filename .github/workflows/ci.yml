@@ -49,7 +49,7 @@ jobs:
       - name: Install Foundry
         run: |
           curl -L https://foundry.paradigm.xyz | bash
-          source ~/.bashrc
+          export PATH="$HOME/.foundry/bin:$PATH"
           foundryup
           echo "$HOME/.foundry/bin" >> $GITHUB_PATH
 
@@ -57,7 +57,7 @@ jobs:
       - name: Install nargo
         run: |
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-          source ~/.bashrc
+          export PATH="$HOME/.nargo/bin:$PATH"
           noirup
           echo "$HOME/.nargo/bin" >> $GITHUB_PATH
 
@@ -65,7 +65,7 @@ jobs:
       - name: Install bb
         run: |
           curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/master/barretenberg/bbup/install | bash
-          source ~/.bashrc
+          export PATH="$HOME/.bb/bin:$PATH"
           bbup
           echo "$HOME/.bb/bin" >> $GITHUB_PATH
 
