@@ -23,11 +23,11 @@ bargo is a Swiss Army knife for circuit proving, verification, smart contract ge
 - **[nargo](https://noir-lang.org/docs/getting_started/installation/)** - Noir language toolchain
 - **[bb](https://github.com/AztecProtocol/aztec-packages/tree/master/barretenberg)** - Barretenberg proving system
 
-### EVM Workflow (Optional)
+### EVM Foundry Workflow (Optional, `evm-foundry` feature)
 - **[Foundry](https://getfoundry.sh/)** - For Solidity contract deployment
 - **Environment Variables**: `RPC_URL`, `PRIVATE_KEY` in `.env` file
 
-### Starknet Workflow (Optional)  
+### Starknet Workflow (Optional, `cairo` feature)
 - **[starkli](https://github.com/xJonathanLEI/starkli)** - Starknet CLI tool
 - **[garaga](https://github.com/keep-starknet-strange/garaga)** - Cairo verifier generation
 - **Python 3.10+** and **pipx** for garaga installation
@@ -41,12 +41,12 @@ Currently, Noir developers must juggle multiple tools and remember complex comma
 # Current workflow (verbose and error-prone)
 nargo check
 nargo execute                  # produce bytecode + witness  
-bb prove   -b target/foo.json -w target/foo.gz -o target/
-bb write_vk -b target/foo.json -o target/
-bb verify   -k target/vk -p target/proof
+bb write_vk -b target/foo.json -o target/ -t evm
+bb prove   -b target/foo.json -w target/foo.gz -o target/ -t evm -k target/vk
+bb verify  -k target/vk -p target/proof -i target/public_inputs -t evm
 
 # Plus remembering different flags for Solidity generation
-bb write_vk --oracle_hash keccak -b target/foo.json -o target/
+bb write_vk -b target/foo.json -o target/ -t evm
 bb write_solidity_verifier -k target/vk -o contracts/Verifier.sol
 
 # And for Starknet verifier contracts:
@@ -72,12 +72,12 @@ bargo evm verify
 bargo evm gen
 bargo evm calldata
 
-# Starknet Workflow  
+# Starknet Workflow (requires `cairo` feature)  
 bargo build
 bargo cairo prove
 bargo cairo verify
 bargo cairo gen
-bargo cairo data
+bargo cairo calldata
 ```
 
 **How bargo improves on underlying tools:**
@@ -96,15 +96,17 @@ bargo cairo data
 - `bargo rebuild` - Clean and rebuild from scratch
 - `bargo doctor` - Check that all required tools are installed
 
-### EVM Commands
+### EVM Commands (Core)
 - `bargo evm prove` - Generate proof and verification key with Keccak oracle
 - `bargo evm verify` - Verify proof locally
-- `bargo evm gen` - Generate Solidity verifier contract and Foundry project
+- `bargo evm gen` - Generate Solidity verifier contract (Foundry project when enabled)
 - `bargo evm calldata` - Generate calldata for on-chain verification
+
+### EVM Commands (Foundry, `evm-foundry` feature)
 - `bargo evm deploy` - Deploy verifier contract to EVM networks
 - `bargo evm verify-onchain` - Verify proof on-chain
 
-### Starknet Commands
+### Starknet Commands (`cairo` feature)
 - `bargo cairo prove` - Generate proof and verification key with Starknet oracle
 - `bargo cairo verify` - Verify proof locally
 - `bargo cairo gen` - Generate Cairo verifier contract using garaga
@@ -130,6 +132,22 @@ cargo install --path .
 # Verify installation
 bargo --help
 bargo doctor  # Check dependencies
+```
+
+### Feature Flags
+
+By default, `bargo` enables both the Cairo and Foundry feature sets. To disable them at compile time:
+
+```toml
+# Cargo.toml dependency example
+bargo = { version = "0.2.0", default-features = false, features = ["cairo"] }
+```
+
+```bash
+# Building locally
+cargo build --no-default-features
+cargo build --no-default-features --features cairo
+cargo build --no-default-features --features evm-foundry
 ```
 
 ### EVM Setup (Optional)
@@ -265,7 +283,7 @@ target/
     └── calldata.json
 
 contracts/
-├── evm/          # Foundry project with Solidity verifier
+├── evm/          # Solidity verifier (Foundry project when enabled)
 └── cairo/        # Cairo verifier project
 ```
 
@@ -324,13 +342,13 @@ Error: Command execution failed: bb prove --scheme ultra_honk
 
 ### Backend-Specific Errors
 
-#### Cairo Backend Errors
+#### Cairo Backend Errors (requires `cairo` feature)
 - **Deploy failures**: Issues with Starknet contract deployment
 - **Class hash errors**: Problems with contract declaration
 - **Garaga integration**: Tool-specific failures during contract generation
 
 #### EVM Backend Errors  
-- **Foundry integration**: Issues with Solidity compilation or deployment
+- **Foundry integration**: Issues with Solidity compilation or deployment (requires `evm-foundry`)
 - **Network errors**: Problems connecting to Ethereum networks
 - **Contract compilation**: Solidity verifier generation failures
 
@@ -365,8 +383,8 @@ Error: Command execution failed: bb prove --scheme ultra_honk
 |---------|----------|
 | "nargo not found" | Install Noir toolchain: `curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash` |
 | "bb not found" | Install Barretenberg: Follow Aztec installation docs |
-| "garaga not found" | Install with pip: `pip install garaga==0.18.1` |
-| "forge not found" | Install Foundry: `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
+| "garaga not found" | Install with pip: `pip install garaga==0.18.1` (only for `cairo`) |
+| "forge not found" | Install Foundry: `curl -L https://foundry.paradigm.xyz \| bash && foundryup` (only for `evm-foundry`) |
 | Version compatibility issues | Use `bargo doctor` to check versions and compatibility |
 | Missing artifacts | Run prerequisite commands: `bargo build` → `bargo <backend> prove` |
 | Network connection issues | Check RPC URLs and network configuration in `.env` |
