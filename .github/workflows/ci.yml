@@ -61,8 +61,8 @@ jobs:
       - name: Install bb
         run: |
           curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/master/barretenberg/bbup/install | bash
-          export PATH="$HOME/.bb/bin:$PATH"
-          bbup
+          export PATH="$HOME/.bb/bin:$HOME/.local/bin:$PATH"
+          "$HOME/.bb/bin/bbup"
           echo "$HOME/.bb/bin" >> $GITHUB_PATH
 
       # -- Step 9: Run the test suite
