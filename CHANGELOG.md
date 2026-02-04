@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [v0.3.0] - 2026-02-04
+
+### Added
+- Compile-time feature gating for Cairo and Foundry functionality via Cargo features (`cairo`, `evm-foundry`)
+- Consolidated architecture overview (`ARCHITECTURE_OVERVIEW.md`)
+- EVM calldata generation now derives JSON from binary proof + public inputs
+
+### Changed
+- EVM BB CLI integration updated to use verifier target (`-t evm`) and VK-first prove flow
+- `bargo evm gen` only initializes Foundry when `evm-foundry` is enabled
+- `bargo doctor` checks feature-gated tools only when their features are enabled
+- Tests for Cairo workflows are feature-gated; EVM deploy/on-chain commands are hidden when `evm-foundry` is off
+- Architecture and reference docs updated for new BB CLI behavior and feature gating
+- CI installs Foundry via `foundry-toolchain`, and installs bbup from Aztec `next` branch
+
+### Removed
+- `ARCHITECTURE_SUMMARY.txt` (merged into `ARCHITECTURE_OVERVIEW.md`)
+
+### Fixed
+- `bargo evm prove` now works with bb 3.x CLI (removal of `--output_format`)
+- CI PATH handling for tool installers (Foundry/bbup)
+
 ## [v0.2.0]
 
 ### Added
