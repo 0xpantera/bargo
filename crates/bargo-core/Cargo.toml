@@ -2,6 +2,10 @@
 name = "bargo-core"
 version = "0.3.0"
 edition = "2024"
+description = "Core library for the bargo CLI"
+license = "MIT"
+repository = "https://github.com/0xpantera/bargo"
+homepage = "https://github.com/0xpantera/bargo"
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
