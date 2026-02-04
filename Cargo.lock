@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "bargo"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "bargo-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atty",
  "clap",
