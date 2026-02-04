@@ -148,7 +148,8 @@ fn test_file_operation_error_context() {
 
     let config = Config {
         verbose: true,
-        dry_run: false, // Will try actual file operations
+        // Avoid deleting the workspace target/ during CI; dry-run is enough here.
+        dry_run: true,
         pkg: Some("nonexistent_package".to_string()),
         quiet: false,
         runner: Arc::new(failing_runner),
