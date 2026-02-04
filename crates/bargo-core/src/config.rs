@@ -13,6 +13,7 @@ pub struct Config {
 }
 
 /// Configuration specific to Cairo deploy operations
+#[cfg(feature = "cairo")]
 #[derive(Clone, Debug)]
 pub struct CairoDeployConfig {
     pub class_hash: Option<String>,
@@ -20,6 +21,7 @@ pub struct CairoDeployConfig {
     pub no_declare: bool,
 }
 
+#[cfg(feature = "cairo")]
 impl CairoDeployConfig {
     pub fn new(class_hash: Option<String>, auto_declare: bool, no_declare: bool) -> Self {
         Self {

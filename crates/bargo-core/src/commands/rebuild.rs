@@ -23,7 +23,15 @@ pub fn run(cfg: &Config, backend: Backend) -> Result<()> {
     }
 
     clean::run(cfg, backend)?;
-    if backend != Backend::Starknet {
+    #[cfg(feature = "cairo")]
+    {
+        if backend != Backend::Starknet {
+            summary.add_operation("Build artifacts cleaned");
+        }
+    }
+
+    #[cfg(not(feature = "cairo"))]
+    {
         summary.add_operation("Build artifacts cleaned");
     }
 

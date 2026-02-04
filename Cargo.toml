@@ -7,7 +7,7 @@ version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-bargo-core = { path = "crates/bargo-core" }
+bargo-core = { path = "crates/bargo-core", default-features = false }
 color-eyre = "0.6.5"
 
 [dev-dependencies]
@@ -19,4 +19,7 @@ assert_fs = "1.1"
 path-slash = "0.2"
 
 [features]
+default = ["cairo", "evm-foundry"]
+cairo = ["bargo-core/cairo"]
+evm-foundry = ["bargo-core/evm-foundry"]
 runner-history-tests = []

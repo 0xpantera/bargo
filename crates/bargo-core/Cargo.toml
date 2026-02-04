@@ -19,3 +19,8 @@ which = "4.4"
 
 [dev-dependencies]
 tempfile = "3.8"
+
+[features]
+default = ["cairo", "evm-foundry"]
+cairo = []
+evm-foundry = []

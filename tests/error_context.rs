@@ -100,6 +100,7 @@ fn test_missing_project_error_context() {
 }
 
 /// Test that missing artifact errors include proper context
+#[cfg(feature = "cairo")]
 #[test]
 fn test_missing_artifacts_error_context() {
     color_eyre::install().ok();
@@ -167,6 +168,7 @@ fn test_file_operation_error_context() {
 }
 
 /// Test that missing proof artifacts errors include proper context
+#[cfg(feature = "cairo")]
 #[test]
 fn test_missing_proof_artifacts_error_context() {
     color_eyre::install().ok();

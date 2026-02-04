@@ -6,7 +6,10 @@
 
 use color_eyre::Result;
 
-use crate::config::{CairoDeployConfig, Config};
+use crate::config::Config;
+
+#[cfg(feature = "cairo")]
+use crate::config::CairoDeployConfig;
 
 /// Trait for polymorphic backend implementations (Cairo, EVM, etc.)
 ///
@@ -43,6 +46,7 @@ pub trait Backend {
 #[derive(Debug, Clone)]
 pub enum BackendConfig {
     /// Cairo/Starknet backend configuration
+    #[cfg(feature = "cairo")]
     CairoDeploy(CairoDeployConfig),
 }
 
@@ -50,6 +54,7 @@ pub enum BackendConfig {
 #[derive(Debug, Clone, Copy)]
 pub enum BackendKind {
     /// Cairo/Starknet backend
+    #[cfg(feature = "cairo")]
     Cairo,
     /// EVM/Ethereum backend
     Evm,
@@ -72,10 +77,9 @@ pub enum BackendKind {
 /// backend.generate(&config)?;
 /// ```
 pub fn backend_for(backend_kind: BackendKind) -> Box<dyn Backend> {
-    use crate::commands::{cairo, evm};
-
     match backend_kind {
-        BackendKind::Cairo => Box::new(cairo::backend::CairoBackend::new()),
-        BackendKind::Evm => Box::new(evm::backend::EvmBackend::new()),
+        #[cfg(feature = "cairo")]
+        BackendKind::Cairo => Box::new(crate::commands::cairo::backend::CairoBackend::new()),
+        BackendKind::Evm => Box::new(crate::commands::evm::backend::EvmBackend::new()),
     }
 }

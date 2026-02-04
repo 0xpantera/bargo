@@ -307,6 +307,7 @@ pub fn ensure_contracts_dir() -> Result<()> {
 /// - If destination exists, it will be removed first
 /// - Creates parent directories of destination if needed
 /// - Moves the entire directory tree
+#[cfg(feature = "cairo")]
 pub fn move_generated_project(from: &str, to: &str) -> Result<()> {
     let source_path = Path::new(from);
     let dest_path = Path::new(to);
@@ -464,6 +465,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "cairo")]
     #[test]
     fn test_move_generated_project() {
         let temp_dir = tempdir().unwrap();

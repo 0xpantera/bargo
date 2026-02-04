@@ -41,47 +41,53 @@ pub fn run(cfg: &Config) -> Result<()> {
         }
     }
 
-    match which::which("garaga") {
-        Ok(path) => {
-            if !cfg.quiet {
-                println!("✅ garaga: {}", path.display());
+    #[cfg(feature = "cairo")]
+    {
+        match which::which("garaga") {
+            Ok(path) => {
+                if !cfg.quiet {
+                    println!("✅ garaga: {}", path.display());
+                }
             }
-        }
-        Err(_) => {
-            if !cfg.quiet {
-                println!("⚠️  garaga: not found (optional - needed for Cairo features)");
-                println!("   Install with: pipx install garaga");
-                println!("   Requires Python 3.10+");
-            }
-        }
-    }
-
-    match which::which("forge") {
-        Ok(path) => {
-            if !cfg.quiet {
-                println!("✅ forge: {}", path.display());
-            }
-        }
-        Err(_) => {
-            if !cfg.quiet {
-                println!("⚠️  forge: not found (optional - needed for EVM features)");
-                println!("   Install with: curl -L https://foundry.paradigm.xyz | bash");
-                println!("   Then run: foundryup");
+            Err(_) => {
+                if !cfg.quiet {
+                    println!("⚠️  garaga: not found (optional - needed for Cairo features)");
+                    println!("   Install with: pipx install garaga");
+                    println!("   Requires Python 3.10+");
+                }
             }
         }
     }
 
-    match which::which("cast") {
-        Ok(path) => {
-            if !cfg.quiet {
-                println!("✅ cast: {}", path.display());
+    #[cfg(feature = "evm-foundry")]
+    {
+        match which::which("forge") {
+            Ok(path) => {
+                if !cfg.quiet {
+                    println!("✅ forge: {}", path.display());
+                }
+            }
+            Err(_) => {
+                if !cfg.quiet {
+                    println!("⚠️  forge: not found (optional - needed for EVM deploy features)");
+                    println!("   Install with: curl -L https://foundry.paradigm.xyz | bash");
+                    println!("   Then run: foundryup");
+                }
             }
         }
-        Err(_) => {
-            if !cfg.quiet {
-                println!("⚠️  cast: not found (optional - needed for EVM features)");
-                println!("   Install with: curl -L https://foundry.paradigm.xyz | bash");
-                println!("   Then run: foundryup");
+
+        match which::which("cast") {
+            Ok(path) => {
+                if !cfg.quiet {
+                    println!("✅ cast: {}", path.display());
+                }
+            }
+            Err(_) => {
+                if !cfg.quiet {
+                    println!("⚠️  cast: not found (optional - used for on-chain helpers)");
+                    println!("   Install with: curl -L https://foundry.paradigm.xyz | bash");
+                    println!("   Then run: foundryup");
+                }
             }
         }
     }
@@ -94,7 +100,9 @@ pub fn run(cfg: &Config) -> Result<()> {
         } else {
             println!("🚨 Some required dependencies are missing.");
             println!("   Core features require: nargo + bb");
+            #[cfg(feature = "evm-foundry")]
             println!("   EVM deployment features also require: forge + cast");
+            #[cfg(feature = "cairo")]
             println!("   Cairo features also require: garaga");
         }
     }

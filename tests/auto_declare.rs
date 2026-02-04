@@ -1,3 +1,5 @@
+#![cfg(feature = "cairo")]
+
 use assert_cmd::Command;
 
 #[test]
