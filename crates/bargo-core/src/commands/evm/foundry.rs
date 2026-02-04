@@ -78,10 +78,10 @@ pub fn deploy_contract(
     // Parse contract address from forge output
     // forge create outputs: "Deployed to: 0x..."
     for line in stdout.lines() {
-        if line.contains("Deployed to:") {
-            if let Some(address) = line.split_whitespace().last() {
-                return Ok(address.to_string());
-            }
+        if line.contains("Deployed to:")
+            && let Some(address) = line.split_whitespace().last()
+        {
+            return Ok(address.to_string());
         }
     }
 
