@@ -11,11 +11,7 @@ use crate::{
     util::{self, Flavour},
 };
 
-/// Generate an EVM-compatible proof using BB with keccak oracle hash
-///
-/// This function generates a proof with the following BB flags:
-/// - `--oracle_hash keccak`
-/// - `--output_format bytes_and_fields`
+/// Generate an EVM-compatible proof using BB
 ///
 /// # Arguments
 /// * `cfg` - Configuration containing runner and flags
@@ -26,6 +22,7 @@ use crate::{
 pub fn generate_evm_proof(cfg: &Config, pkg: &str) -> Result<()> {
     let bytecode = util::get_bytecode_path(pkg, Flavour::Bb);
     let witness = util::get_witness_path(pkg, Flavour::Bb);
+    let vk_path = util::get_vk_path(Flavour::Evm);
 
     common::run_tool(
         cfg,
@@ -38,18 +35,15 @@ pub fn generate_evm_proof(cfg: &Config, pkg: &str) -> Result<()> {
             &witness.to_string_lossy(),
             "-o",
             "./target/evm/",
-            "--oracle_hash",
-            "keccak",
-            "--output_format",
-            "bytes_and_fields",
+            "-k",
+            &vk_path.to_string_lossy(),
+            "-t",
+            "evm",
         ],
     )
 }
 
 /// Generate an EVM-compatible verification key using BB
-///
-/// This function generates a VK with the following BB flags:
-/// - `--oracle_hash keccak`
 ///
 /// # Arguments
 /// * `cfg` - Configuration containing runner and flags
@@ -65,12 +59,12 @@ pub fn generate_evm_vk(cfg: &Config, pkg: &str) -> Result<()> {
         "bb",
         &[
             "write_vk",
-            "--oracle_hash",
-            "keccak",
             "-b",
             &bytecode.to_string_lossy(),
             "-o",
             "./target/evm/",
+            "-t",
+            "evm",
         ],
     )
 }
@@ -102,8 +96,8 @@ pub fn verify_evm_proof(cfg: &Config, _pkg: &str) -> Result<()> {
             &vk_path.to_string_lossy(),
             "-i",
             &public_inputs_path.to_string_lossy(),
-            "--oracle_hash",
-            "keccak",
+            "-t",
+            "evm",
         ],
     )
 }
@@ -120,8 +114,8 @@ pub fn verify_evm_proof(cfg: &Config, _pkg: &str) -> Result<()> {
 /// # Returns
 /// * `Result<()>` - Success or error from either operation
 pub fn generate_evm_proof_and_vk(cfg: &Config, pkg: &str) -> Result<()> {
-    generate_evm_proof(cfg, pkg)?;
     generate_evm_vk(cfg, pkg)?;
+    generate_evm_proof(cfg, pkg)?;
     Ok(())
 }
 

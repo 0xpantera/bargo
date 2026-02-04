@@ -5,6 +5,7 @@
 
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
+use serde_json::json;
 use tracing::info;
 
 use crate::{
@@ -15,7 +16,10 @@ use crate::{
     },
 };
 
-use super::{bb_operations, directories, foundry, load_env_vars};
+use super::{bb_operations, directories, load_env_vars};
+
+#[cfg(feature = "evm-foundry")]
+use super::foundry;
 
 /// Run the EVM gen workflow
 ///
@@ -51,51 +55,50 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
 
     let mut summary = OperationSummary::new();
 
-    // Step 1: Initialize Foundry project
+    // Step 1: Initialize project structure
     if cfg.verbose {
-        info!("Initializing Foundry project");
+        info!("Initializing EVM project structure");
     }
     let foundry_timer = Timer::start();
 
-    foundry::init_default_foundry_project(cfg).map_err(enhance_error_with_suggestions)?;
+    #[cfg(feature = "evm-foundry")]
+    {
+        foundry::init_default_foundry_project(cfg).map_err(enhance_error_with_suggestions)?;
 
-    if !cfg.quiet {
-        let foundry_dir = directories::get_evm_contracts_dir();
-        println!(
-            "{}",
-            success(&format_operation_result(
-                "Foundry project initialized",
-                &foundry_dir,
-                &foundry_timer
-            ))
-        );
-        summary.add_operation("Foundry project structure");
+        if !cfg.quiet {
+            let foundry_dir = directories::get_evm_contracts_dir();
+            println!(
+                "{}",
+                success(&format_operation_result(
+                    "Foundry project initialized",
+                    &foundry_dir,
+                    &foundry_timer
+                ))
+            );
+            summary.add_operation("Foundry project structure");
+        }
     }
 
-    // Step 2: Generate EVM proof
-    if cfg.verbose {
-        info!("Generating EVM proof with keccak oracle");
-    }
-    let proof_timer = Timer::start();
-    bb_operations::generate_evm_proof(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
+    #[cfg(not(feature = "evm-foundry"))]
+    {
+        directories::ensure_evm_contracts_dir().map_err(enhance_error_with_suggestions)?;
+        directories::ensure_evm_contracts_src_dir().map_err(enhance_error_with_suggestions)?;
 
-    if !cfg.quiet {
-        let proof_path = util::get_proof_path(Flavour::Evm);
-        println!(
-            "{}",
-            success(&format_operation_result(
-                "EVM proof generated",
-                &proof_path,
-                &proof_timer
-            ))
-        );
-        summary.add_operation(&format!(
-            "EVM proof ({})",
-            util::format_file_size(&proof_path)
-        ));
+        if !cfg.quiet {
+            let contracts_dir = directories::get_evm_contracts_dir();
+            println!(
+                "{}",
+                success(&format_operation_result(
+                    "EVM contracts directory prepared",
+                    &contracts_dir,
+                    &foundry_timer
+                ))
+            );
+            summary.add_operation("EVM contracts directory");
+        }
     }
 
-    // Step 3: Generate EVM VK
+    // Step 2: Generate EVM VK
     if cfg.verbose {
         info!("Generating EVM verification key");
     }
@@ -115,6 +118,29 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         summary.add_operation(&format!(
             "Verification key ({})",
             util::format_file_size(&vk_path)
+        ));
+    }
+
+    // Step 3: Generate EVM proof
+    if cfg.verbose {
+        info!("Generating EVM proof");
+    }
+    let proof_timer = Timer::start();
+    bb_operations::generate_evm_proof(cfg, &pkg_name).map_err(enhance_error_with_suggestions)?;
+
+    if !cfg.quiet {
+        let proof_path = util::get_proof_path(Flavour::Evm);
+        println!(
+            "{}",
+            success(&format_operation_result(
+                "EVM proof generated",
+                &proof_path,
+                &proof_timer
+            ))
+        );
+        summary.add_operation(&format!(
+            "EVM proof ({})",
+            util::format_file_size(&proof_path)
         ));
     }
 
@@ -144,6 +170,7 @@ pub fn run_gen(cfg: &Config) -> Result<()> {
         println!();
         println!("🎯 Next steps:");
         println!("  • Generate calldata: bargo evm calldata");
+        #[cfg(feature = "evm-foundry")]
         println!("  • Deploy contract: bargo evm deploy --network <network>");
     }
 
@@ -234,6 +261,7 @@ pub fn run_verify(cfg: &Config) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
+#[cfg(feature = "evm-foundry")]
 pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
     load_env_vars();
 
@@ -334,26 +362,18 @@ pub fn run_deploy(cfg: &Config, network: &str) -> Result<()> {
 pub fn run_calldata(cfg: &Config) -> Result<()> {
     load_env_vars();
 
-    // Validate Foundry installation
+    // Check that proof and public inputs exist (BB output for EVM)
+    let proof_path = util::get_proof_path(Flavour::Evm);
+    let public_inputs_path = util::get_public_inputs_path(Flavour::Evm);
     if !cfg.dry_run {
-        foundry::validate_foundry_installation().map_err(enhance_error_with_suggestions)?;
-    }
-
-    // Check that proof fields JSON exists (BB output for EVM)
-    let proof_fields_path = std::path::PathBuf::from("./target/evm/proof_fields.json");
-    if !cfg.dry_run && !proof_fields_path.exists() {
-        return Err(create_smart_error(
-            "Proof fields file not found",
-            &[
-                "Run 'bargo build' and 'bargo evm prove' first to generate proof files",
-                "Ensure the target/evm/proof_fields.json file exists",
-            ],
-        ));
+        util::validate_files_exist(&[proof_path.clone(), public_inputs_path.clone()])
+            .map_err(enhance_error_with_suggestions)?;
     }
 
     if cfg.dry_run {
-        println!("Would generate calldata from proof fields JSON");
-        println!("Would read: {}", proof_fields_path.display());
+        println!("Would generate calldata from proof and public inputs");
+        println!("Would read: {}", proof_path.display());
+        println!("Would read: {}", public_inputs_path.display());
         return Ok(());
     }
 
@@ -361,14 +381,43 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
         info!("Generating calldata for EVM proof verification");
     }
 
-    // Read proof fields and format for contract call
-    let proof_fields_content = std::fs::read_to_string(&proof_fields_path)
-        .wrap_err_with(|| format!("reading proof fields file {}", proof_fields_path.display()))?;
+    // Read proof and public inputs (binary) and format for contract call
+    let proof_bytes = std::fs::read(&proof_path)
+        .wrap_err_with(|| format!("reading proof file {}", proof_path.display()))?;
+    let public_inputs = std::fs::read(&public_inputs_path).wrap_err_with(|| {
+        format!(
+            "reading public inputs file {}",
+            public_inputs_path.display()
+        )
+    })?;
+
+    if public_inputs.len() % 32 != 0 {
+        return Err(create_smart_error(
+            "Public inputs length is not a multiple of 32 bytes",
+            &[
+                "Ensure the proof was generated for the EVM verifier target",
+                "Re-run: bargo evm prove",
+            ],
+        ));
+    }
+
+    let public_inputs_hex: Vec<String> = public_inputs
+        .chunks(32)
+        .map(|chunk| format!("0x{}", hex::encode(chunk)))
+        .collect();
+
+    let calldata = json!({
+        "proof": format!("0x{}", hex::encode(proof_bytes)),
+        "public_inputs": public_inputs_hex,
+    });
 
     // Save formatted calldata
     let calldata_path = std::path::PathBuf::from("./target/evm/calldata.json");
-    std::fs::write(&calldata_path, &proof_fields_content)
-        .wrap_err_with(|| format!("writing calldata to {}", calldata_path.display()))?;
+    std::fs::write(
+        &calldata_path,
+        serde_json::to_vec_pretty(&calldata).unwrap(),
+    )
+    .wrap_err_with(|| format!("writing calldata to {}", calldata_path.display()))?;
 
     if !cfg.quiet {
         let calldata_timer = Timer::start();
@@ -387,9 +436,12 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
             util::format_file_size(&calldata_path)
         ));
         summary.print();
-        println!();
-        println!("🎯 Next step:");
-        println!("  • Verify on-chain: bargo evm verify-onchain");
+        #[cfg(feature = "evm-foundry")]
+        {
+            println!();
+            println!("🎯 Next step:");
+            println!("  • Verify on-chain: bargo evm verify-onchain");
+        }
     }
 
     Ok(())
@@ -402,6 +454,7 @@ pub fn run_calldata(cfg: &Config) -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Success or error from workflow
+#[cfg(feature = "evm-foundry")]
 pub fn run_verify_onchain(cfg: &Config) -> Result<()> {
     load_env_vars();
 
