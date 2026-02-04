@@ -60,18 +60,10 @@ jobs:
       # -- Step 8: Install bb for proof generation
       - name: Install bb
         run: |
-          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/master/barretenberg/bbup/install | bash
-          export PATH="$HOME/.bb/bin:$HOME/.local/bin:$PATH"
-          if [ -x "$HOME/.bb/bin/bbup" ]; then
-            "$HOME/.bb/bin/bbup"
-          elif [ -x "$HOME/.local/bin/bbup" ]; then
-            "$HOME/.local/bin/bbup"
-          else
-            echo "bbup not found after install" >&2
-            exit 1
-          fi
-          echo "$HOME/.bb/bin" >> $GITHUB_PATH
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/next/barretenberg/bbup/install | bash
+          export PATH="$HOME/.bb:$PATH"
+          "$HOME/.bb/bbup"
+          echo "$HOME/.bb" >> $GITHUB_PATH
 
       # -- Step 9: Run the test suite
       - name: cargo test
