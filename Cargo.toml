@@ -11,7 +11,7 @@ repository = "https://github.com/0xpantera/bargo"
 homepage = "https://github.com/0xpantera/bargo"
 
 [dependencies]
-bargo-core = { path = "crates/bargo-core", default-features = false }
+bargo-core = { path = "crates/bargo-core", version = "0.3.0", default-features = false }
 color-eyre = "0.6.5"
 
 [dev-dependencies]
